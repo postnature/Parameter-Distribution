@@ -1,6 +1,6 @@
 # parameter-distribution
 
-Parameter Distribution is a set of tools for SuperCollider which allow for generating values which can be set to parameters of spatially distributed synthesis processes. There are two groups of classes included – arrays and patterns. The former generate arrays of values. The latter does the same, but to be used as SuperCollider patterns, together with e.g., Pbind or Pmono.
+Parameter Distribution is a set of tools for SuperCollider which allow for generating values which can be set to parameters of spatially distributed synthesis processes. There are two groups of classes included – arrays and patterns. The former generates arrays of values. The latter does the same, but as SuperCollider patterns, to be used together with e.g., Pbind or Pmono.
 
 Installation:
 
