@@ -257,7 +257,7 @@ PparamCells : Pattern {
 
 	var numPoints=8, inVals,minVal=2000, maxVal=12000, curve=\exp, errorProb=0.1, neighbourBiasFunc=nil,warp=1, length=inf;
 
-	*new { arg numPoints=8, inVals,minVal=2000, maxVal=12000, curve=2, errorProb=0.1, neighbourBiasFunc=nil, warp=1, length=inf;
+	*new { arg numPoints=8, inVals,minVal=2000, maxVal=12000, curve=\exp, errorProb=0.1, neighbourBiasFunc=nil, warp=1, length=inf;
 
 		^super.newCopyArgs(numPoints, inVals, minVal, maxVal, curve, errorProb, neighbourBiasFunc,warp,length);
 	}

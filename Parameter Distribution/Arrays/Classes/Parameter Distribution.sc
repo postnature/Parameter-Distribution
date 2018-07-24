@@ -3,9 +3,9 @@ ParamPeak {
 
 	//peakwidth must be an even number. It denotes the sum of segments on both sides of peak, so 4 means 2 segments on each side of peak, e.g. [ 0.1, 0.4, 1, 0.4, 0.1 ]
 	// positive curve value creates a concave envelope, negative vice versa
-	* new { | numPoints=12, peakWidth=6, peakPos=0, minVal=0.01, maxVal=1,  curve=3,interp=0 |
+	* new { | numPoints=12, peakWidth=6, peakPos=0, minVal=0.01, maxVal=1,  curve=3 |
 
-		var envFunc,curves,curvArray,levels,env,durArray,curvelength,array,panenv,nowArray,maxi,move;
+		var envFunc,curves,curvArray,levels,env,durArray,curvelength,array,panenv,outArray,maxi,move;
 		curvelength=peakWidth/2;//width of one side of the envelope peak in amount of channels
 		durArray=[curvelength,curvelength,(numPoints-1)-(curvelength*2)];//the whole array in 3 legs as long as the amount of channels
 		curvArray=[curve,curve.neg,curve.neg];//curves for the env
@@ -16,11 +16,11 @@ ParamPeak {
 		array=Array.series(numPoints,0,1);//an array with indexes; one for each channel
 		array=env.at(array);// the values of the envelope are read into the index of each channel
 
-		panenv=Env({|i| array.rotate(i)}!numPoints, {1}!(numPoints-1),interp);//an envelope of envelopes with the value array rotated for each channel, so that every time point in this envelope will generate an array of values going to each channel
+		panenv=Env({|i| array.rotate(i)}!numPoints, {1}!(numPoints-1),\lin);//an envelope of envelopes with the value array rotated for each channel, so that every time point in this envelope will generate an array of values going to each channel
 		peakPos=peakPos-(peakWidth/2);
-		nowArray=panenv.at(peakPos%numPoints);//here is the array of now points, this is mapped to each individual synth at a given moment
+		outArray=panenv.at(peakPos%numPoints);//here is the array of now points, this is mapped to each individual synth at a given moment
 
-		^nowArray;
+		^outArray;
 
 	}
 
@@ -30,7 +30,7 @@ ParamPeakWarp {
 
 	* new { | numPoints=12, peakPos=1,minVal=0.01,maxVal=1,curve=3|
 
-var envFunc,curves,curvArray,levels,env,segsArray,chArray,nowArray;
+var envFunc,curves,curvArray,levels,env,segsArray,chArray,outArray;
 segsArray=Array.newClear(2);
 segsArray.put(0,peakPos);
 segsArray.put(1,numPoints-1-peakPos);
@@ -40,10 +40,10 @@ chArray=Array.series(numPoints,0,1);
 
 	env=Env(levels,segsArray,curvArray);
 	env.duration=chArray.maxItem;
-	nowArray=env.at(chArray);
-	nowArray.postln;
+	outArray=env.at(chArray);
+	outArray.postln;
 
-	^nowArray;
+	^outArray;
 
 	}
 
@@ -147,12 +147,14 @@ ParamLatPairs {
 
 //w=ParamCells(neighbourBiasFunc:nil)
 //w.next(2000,0)
+//p=ParamCells(warp:2)
+//p.next
 
 ParamCells {
-	var <>numPoints=8, <>minVal=2000, <>maxVal=12000, <>curve=\exp, <>errorProb=0.1, <>neighbourBiasFunc=nil,<>warp=2;
+	var <>numPoints=8, <>minVal=2000, <>maxVal=12000, <>curve=\exp, <>errorProb=0.1, <>neighbourBiasFunc=nil,<>warp=1;
 	var cellArray, cellFunc, routine,outvals, errorfunc, nBias;
 
-	*new { | numPoints=8, minVal=2000, maxVal=12000, curve=\exp, errorProb=0.1, neighbourBiasFunc=nil,warp=2 |
+	*new { | numPoints=8, minVal=2000, maxVal=12000, curve=\exp, errorProb=0.1, neighbourBiasFunc=nil,warp=1 |
 
 		^super.newCopyArgs(numPoints, minVal, maxVal, curve, errorProb, neighbourBiasFunc,warp).init;
 
@@ -188,12 +190,6 @@ ParamCells {
 			bias=nBias.value;
 			cell=(bias*cellArray.wrapAt(i-1)) + ((1.0-bias)*cellArray.wrapAt(i+1));
 
-			//do this change.. to improve so one can use numbers for curve
-/*			case
-			{curve==\exp} {gravindex=cell.explin(minVal,maxVal,0,2)}
-			{curve==\lin} {gravindex=cell.linlin(minVal,maxVal,0,2)}
-			{curve.isNumber} {gravindex=cell.curvelin(minVal,maxVal,0,2,curve)}*/
-
 			switch(curve,
 			\exp, {gravindex=cell.explin(minVal,maxVal,0,2)},//get the index of the current value in a range 0-2
 			\lin, {gravindex=cell.linlin(minVal,maxVal,0,2)}
@@ -201,15 +197,22 @@ ParamCells {
 
 			grav=gravityBias[gravindex];//determine the pull towards or away from the middle
 
-			if(gravindex>1, {cell=cell*rrand(1, grav)}, {cell=cell/rrand(1, grav)}); //if gravindex is more than 1 then push cell away from centre
+			//if(gravindex>1, {cell=cell*rrand(1, grav)}, {cell=cell/rrand(1, grav)}); //if gravindex is more than 1 then push cell away from centre
+
+			if(gravindex>1, {
+				grav = case
+				{grav>1} {cell=cell*rrand(1, grav)}
+				{grav<1} {cell=cell/rrand(1, grav)}
+
+			}, {
+				grav = case
+				{grav>1} {cell=cell/rrand(1, grav)}
+				{grav<1} {cell=cell*rrand(1, grav)}
+			});
 
 			if(errorProb.coin,{cell=errorfunc.()},cell);//potential error
 			cell
 			};
-
-		//outvals=cellArray.lincurve(0.0,1.0,minVal,maxVal,curve);//scale to output
-
-		//^outvals
 
 		^cellArray;
 	}
@@ -239,9 +242,6 @@ ParamCells {
 		if(errorProb.coin,{cell=errorfunc.()},cell);//potential error
 
 		cellArray.put(index, cell);
-		//outvals=cellArray.lincurve(0.0,1.0,minVal,maxVal,curve);//scale to output
-
-		//^outvals
 
 		^cell
 	}
