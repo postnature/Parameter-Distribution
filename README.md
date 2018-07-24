@@ -1,6 +1,6 @@
-# parameter-distribution
+# Topographic Synthesis
 
-Parameter Distribution is a set of tools for SuperCollider which allow for generating values which can be set to parameters of spatially distributed synthesis processes. There are two groups of classes included – arrays and patterns. The former generates arrays of values. The latter does the same, but as SuperCollider patterns, to be used together with e.g., Pbind or Pmono.
+Topographic Synthesis features a set of tools for SuperCollider which allow for generating values which can be set to parameters of spatially distributed synthesis processes. There are two groups of classes included – arrays and patterns. The former generates arrays of values. The latter does the same, but as SuperCollider patterns, to be used together with e.g., Pbind or Pmono.
 
 Installation:
 
