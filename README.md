@@ -4,9 +4,7 @@ The Parameter Distribution library features a set of tools for SuperCollider. Th
 
 Installation:
 
-1) download the Topographic Synthesis folder
-2) download SuperCollider at https://supercollider.github.io/download
-3) install SuperCollider
-4) put the Topographic Synthesis folder in ~Library/Application Support/SuperCollider/Extensions
-
+1) download the Parameter Distribution folder
+2) download and install SuperCollider if you haven't already: https://supercollider.github.io/download
+3) put the Parameter Distribution folder in ~Library/Application Support/SuperCollider/Extensions
 
