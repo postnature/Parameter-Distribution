@@ -4,9 +4,9 @@ Topographic Synthesis features a set of tools for SuperCollider which allow for 
 
 Installation:
 
-1) download parameter-distribution
+1) download the Topographic Synthesis folder
 2) download SuperCollider at https://supercollider.github.io/download
 3) install SuperCollider
-4) put the parameter-distribution folder in ~Library/Application Support/SuperCollider/Extensions
+4) put the Topographic Synthesis folder in ~Library/Application Support/SuperCollider/Extensions
 
 
