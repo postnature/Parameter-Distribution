@@ -1,0 +1,223 @@
+class:: ParamCells
+summary:: Outputs an array of values, each of which is influenced by the value of its neighbours, by randomised averaging. Successive iteration over an instance of ParamCells will generate a sequence of arrays with values which organise in relation to one another.
+
+related:: Classes/ParamPeak, Classes/ParamCurve, Classes/ParamField, Classes/ParamLatPairs, Classes/ParamCellFunc, Classes/ParamDeviation, Classes/ParamFeed
+categories:: Parameter Distribution
+
+Description::
+
+ParamCells is one of several parameter distribution classes intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. The parameter distribution classes offer possibilities for global control of local spatial differentiation, which is useful both in algorithmic composition and live performance. In a mulichannel set-up, each output value can be mapped to an individual synth in a different output channel.
+
+For more details see:
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+classmethods::
+
+method::new
+
+argument::numPoints
+The size of the array (quantity of channels). In topographic synthesis, each point corresponds to a synth outputting to an individual loudspeaker channel in space.
+argument::minVal
+The minimum output value allowed.
+argument::maxVal
+The maximum output value allowed.
+argument::curve
+The symbol code:: \lin or \exp :: determining the scaling of output values.
+argument::errorProb
+A float of <1, determining the probability for error, meaning that the result of the algorithm will be replaced by a random number. A small error probability can make the bahaviour more interesting and prevent stasis.
+argument::neighbourBiasFunc
+An optional function outputting a number between 0, and 1, indicating how to determine the balance between left and right neighbour values in the calculation of a new value. Closer to 0 increases left probability and closer to 1 increases right probability. The default is nil, which means {1.0.rand}.
+argument::warp
+A value of <>1. This creates a warp tendency for the output values. If the value is >1 then a "bump" is created so that the output values are more likely to slip towards minVal or maxVal. If the value is <1 then the opposite will occur: the outputs values will tend towards the middle between minVal and maxVal (determined either linearly or exponentially depending on the curve argument). 1 means no warp.
+
+instancemethods::
+NB. All the arguments for class method .new have getters and setters so that a instance of ParamCells can be updated.
+
+method:: next
+argument::inVal
+An optional input value which will replace the value in one of the cells before calculating the output array. This value will not be output, but it will influence its neighbouring values. If set to nil, the algorithm with generate output without input.
+argument::index
+An optional index in the array at which to put inVal. Must be a value between 0 and numPoints-1.If set to nil, an index will be randomly chosen.
+returns:: a new array of values.
+discussion::
+code::
+//instantiate an 8-channel ParamCells
+x=ParamCells(numPoints:8,minVal:0.0,maxVal:1.0,curve:\lin,errorProb:0.1,neighbourBiasFunc:nil,warp:1);
+//iterate with an input value at chosen index
+x.next(0.8,2)
+//iterate without specifying arguments
+x.next
+//change the warp and watch how output values tend towards edges or middle
+x.warp=1.2 //>1 will repel from centre
+x.warp=0.8 //<1 will attract to centre
+::
+
+method::nextCell
+Updates and outputs the value of only one specified cell. In topographic synthesis, this is useful if you want to change parameters of only one synth in one channel, rather than all at once.
+argument::inVal
+An optional input value which will replace the output value in the next iteration of the array. This means that inVal will influence the future of its neighbours, but not this current iteration.
+argument::index
+The index of the cell to update. Must be a value between 0 and numPoints-1.
+returns:: a single value
+
+discussion::
+code::
+//instantiating an 8-channel ParamCells
+x=ParamCells(numPoints:8,minVal:0.0,maxVal:1.0,curve:\lin,errorProb:0.1,neighbourBiasFunc:nil,warp:1);
+//iterate
+x.nextCell(0.2,8.rand);//iterate with input
+x.nextCell(nil,8.rand);//iterate without input
+::
+Examples::
+
+code::
+
+// a simple synth
+(
+SynthDef(\sin, { | out, freq, phase=0,amp=0.1 |
+	var sin=SinOsc.ar(freq,phase,mul:amp);
+	Out.ar(out,sin)
+}).add
+);
+
+//if you're testing this in stereo you can do a multichannel mock-up using Splay to mix down to stereo, just to get the idea
+
+(
+//this synth is for 8 channels
+SynthDef(\splay8, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, 8);//8 consecutuve channels
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+);
+
+// a simple mapping example
+//set your outputs
+~outputs=(0..7); //or whatever your multichannel outputs are
+
+//array of synths distributed to an 8-channel speaker array.
+~synthArray={|i| Synth(\sin, [\out,~outputs[i],\freq,200,\amp,0.1])}!8;
+
+//if mixing down to stereo, add this
+~splay=Synth(\splay8,addAction:\addToTail);
+
+//instantiate a ParamCells for phase values
+~phaseCells=ParamCells(numPoints:8,minVal:0,maxVal:8pi,curve:\lin);
+
+//a function for iterating the cells and updating the synths
+(
+~updateFunc={ |synthArray,phasesCells|
+	var phases=phasesCells.next;//generate a new array;
+	phases.postln;
+	synthArray.do{|synth,i| synth.set(\phase,phases[i])}//update the synths
+}
+)
+//iterate this to hear to hear shifting perspectives
+~updateFunc.(~synthArray,~phaseCells)
+
+//a basic spectral texture
+//every move on the "freq" fader will iterate the ParamCells and map the output values to the array of synths
+//adjust the warp fader to bias the output values towards or away from centre
+//the button on top sets wether to update with .next (all channels at once), or .nextCells (one at a time)
+(
+var outs=(0..7);
+var numChannels=outs.size;
+var stereoMon=true;//set to true if you're monitoring this in stereo
+var allCells=true;
+var group=Group();
+var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+var synths={|i|Synth(\sin, [\out,outs[i],\freq,2000,\amp,0.01],target:group)}!numChannels;
+var freqcells=ParamCells(numPoints:numChannels,minVal:2000,maxVal:12000,curve:\exp,errorProb:0.1,warp:1);
+
+stereoMon.if({
+	splaySynth.(numChannels);
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+w=Window("ParamCells",bounds:Rect(200, 200, 185, 480));
+w.front;
+w.addFlowLayout;
+
+Button(w, 175@80).states_([ ["all channels at once",Color.white, Color.black], ["one channel at a time",Color.black, Color.white] ]).action_({|button|
+
+	switch(button.value,
+		0, {allCells=true},
+		1, {allCells=false}
+	)});
+
+EZSlider(w,85@350,"freq",controlSpec:ControlSpec(minval:2000,maxval:12000,warp:\exp,step:1,units:\freq), action:{|val|
+
+	switch(allCells,
+		true, {var freqs=freqcells.next(val.value,numChannels.rand);
+				synths.do{|synth,i|synth.set(\freq,freqs[i])};
+		},
+		false, {
+			var index=numChannels.rand;
+			var freq=freqcells.nextCell(val.value,index);
+				synths[index].set(\freq,freq)
+	})
+},layout:'vert');
+
+EZSlider(w,85@350,"warp",controlSpec:ControlSpec(minval:0.5,maxval:2.0,warp:\exp), action:{|val|
+	freqcells.warp=val.value;
+},initVal:1,initAction:true,layout:'vert');
+
+)
+
+(
+SynthDef(\glissgrain, {| out,freq=1000, lpfmod=2, attProp=0.1,dur=0.1, gliss=0.7,curve,amp=0.1 |
+	var env,freqenv,osc,grain;
+	env=Env(times:[attProp,1-attProp]*dur,curve:[curve,curve.neg]);
+	freqenv=env.copy.levels_([1,gliss,1]).kr;
+	freq=(freq*freqenv).fold(40,18000);
+	osc=SinOscFB.ar(freq,freq.explin(600,10000,1.0,0.0));
+	grain=MidEQ.ar(MidEQ.ar(BLowPass4.ar(BHiPass4.ar(osc*env.kr(doneAction:2),freq*0.5,0.01).softclip,(freq*lpfmod).fold(200,16000), 0.3),3500,1,-9),500,0.5,3);
+	OffsetOut.ar(out, grain*amp)
+}).add;
+);
+
+// 8 different grains, each at a different channel, are generated at every iteration of the texture
+// the differentiation between the spatially distributed grains is created with iterations of ParamCells for grain frequency, glissando, envelope curve and duration
+(
+var outs=(0..7);//set your outputs here, as many as you like!
+var numChannels=outs.size;
+var stereoMon=true;//set to true if monitoring in stereo
+var group=Group();
+var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+stereoMon.if({
+	splaySynth.(numChannels);
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+fork {
+// frequencies
+	var freqCells=ParamCells(numChannels+1,minVal:200,maxVal:12000,curve:\exp,errorProb:0.05,warp:1.05);
+//durations. NB this has 10 points: the last 2 are scaled below to generate deltas and attProp
+	var durCells=ParamCells(numChannels+2,minVal:0.0025,maxVal:0.08,curve:\exp,errorProb:0.1,warp:1.05);
+//curves
+	var curveCells=ParamCells(numChannels,minVal:-20,maxVal:50,curve:\lin,errorProb:0.05,warp:1.1);
+	var glissCells=ParamCells(numChannels,minVal:0.6,maxVal:1.4,curve:\exp,errorProb:0.05,warp:1);
+	inf.do{
+		var freqs,durs,amps,curves,glisses,lpfmod,attackProporton,delta;
+		freqs=freqCells.next;
+		durs=durCells.next;
+		curves=curveCells.next;
+		glisses=glissCells.next;
+		lpfmod=freqs[numChannels].explin(200,12000,10.0,1.0);
+		attackProporton=durs[numChannels].expexp(0.0025,0.08,0.1,0.5);
+		delta=durs[numChannels+1].expexp(0.0025,0.08,0.2,0.01);//derive delta from the last cell in durs
+		{|i|Synth(\glissgrain,[\out,outs[i],\freq,freqs[i],\lpfmod,lpfmod,\attProp,attackProporton,\dur,durs[i],\gliss,glisses[i],\curve,curves[i],\amp,0.1],target:group)}!numChannels;
+
+		delta.wait;//time delta between iterations
+	}
+}
+)
+::

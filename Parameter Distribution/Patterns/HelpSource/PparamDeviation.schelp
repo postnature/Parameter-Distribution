@@ -1,0 +1,78 @@
+class::PparamDeviation
+summary:: Generates an array of values deviating from a given mean, by user-set distribution and deviation range. It is intended for distrubuting parameter settings in multichannel synthesis. PparamDeviation is the pattern version of ParamDeviation.
+
+related:: Classes/PparamPeak, Classes/PparamCurve, Classes/PparamField, Classes/PparamLatPairs, Classes/PparamCells, Classes/PparamCellFunc, Classes/ParamDeviation
+categories:: Parameter Distribution
+
+Description::
+
+PparamDeviation is one of several parameter distribution patterns intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. In a mulichannel set-up, each output value can be mapped to an individual synth in a different output channel. The parameter distribution classes offer possibilities for global control of local spatial differentiation, which is useful both in algorithmic composition and live performance.
+
+For more details see:
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+classmethods::
+
+method::new
+
+argument::numPoints
+The size of the array (quantity of channels). In topographic synthesis, each point corresponds to a synth outputting to an individual loudspeaker channel in space.
+argument::val
+An input value from which an array of deviations are generated. Can be a pattern.
+argument::deviation
+The range of deviation from the given mean value. The number is a fractional multiple.Can be a pattern.
+argument::scaleArray
+An optional array of numbers to multiply the output values with. Leave at nil if no scaling is desired.Can be a pattern.
+argument::dist
+A symbol indicating the probability disribution to be used: code:: \lin,\exp,\gauss,\cauchy,\logistic::
+argument::boundary
+A symbol indicating what happens when a value generated is outside the range between minVal and maxVal: \clip, \fold, \wrap
+argument::minVal
+The minimum output value allowed. Can be a pattern.
+argument::maxVal
+The maximum output value allowed. Can be a pattern.
+argument:: length
+Number of iterations of the pattern.
+
+Examples::
+
+code::
+
+(
+SynthDef(\gaussgrain, {| out,freq, dur, width,amp=0.1 |
+
+	var osc=SinOsc.ar(freq);
+	var grain=osc*LFGauss.ar(dur,width,loop:0,doneAction:2);
+	OffsetOut.ar(out, grain*amp)
+}).add;
+);
+
+~outputs=(0..15); //or whatever your multichannel outputs are
+
+//different grains in each different channel generated at every iteration of the texture
+// the differentiation between the spatially distributed grains is created with instances of ParamDeviation
+(
+var stereoMon=false;
+var group=Group();
+var numChannels=~outputs.size;
+var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+
+stereoMon.if({
+	splaySynth.(numChannels);//create splay synth;
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+Pbind(\instrument, \gaussgrain,
+	\out,~outputs,
+	\freq,PparamDeviation(numChannels, Pbrown(400,10000,1000),deviation:0.1,dist:\cauchy,boundary:\fold,minVal:400,maxVal:10000,length:inf),
+	\dur,PparamDeviation(numChannels, Pbrown(0.001,0.1,0.05),deviation:0.1,dist:\cauchy,boundary:\fold,minVal:0.001,maxVal:0.01,length:inf),
+	\width,PparamDeviation(numChannels, Pbrown(0.001,0.1,0.05),deviation:0.1,dist:\cauchy,boundary:\fold,minVal:0.001,maxVal:0.01,length:inf),
+	\delta, Pwhite(0.01,0.1)).play;
+)
+
+::

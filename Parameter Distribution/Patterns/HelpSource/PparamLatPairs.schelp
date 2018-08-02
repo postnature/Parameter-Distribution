@@ -1,0 +1,98 @@
+class:: PparamLatPairs
+summary:: Generates an array of values derived from an envelope, intended for lateral grouping of parameters for synthesis processes distributed in a multichannel loudspeaker array. An envelope is created for the longitude (front to rear) of the multi-channel system, along which latitudes of channel pairs are placed. The result is a globally controlled field that can tilt and warp flexibly.
+
+related:: Classes/PparamPeak, Classes/PparamCurve, Classes/PparamField, Classes/PparamCells, Classes/PparamCellFunc, Classes/PparamDeviation, Classes/PparamFeed, Classes/ParamLatPairs
+categories:: Parameter Distribution
+
+Description::
+
+PparamLatPairs is one of several parameter distribution patterns intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. The parameter distribution classes offer possibilities for global control of local spatial differentiation, which is useful both in algorithmic composition and live performance. In a mulichannel set-up, each output value can be mapped to an individual synth in a different output channel. If different instances of ParamLatPairs are generated over time and mapped to the same set of synths, a dynamically moving spatial texture can be created.
+
+For more details regarding parameter distrubution and synthesis see:
+
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+For more on spatial dimensions (latitudes and longitudes) see:
+
+Nyström, E. (2015) 'Low-Level Topology of Spatial Texture' Proceedings of ICMC 2015, Denton, Texas, US.
+
+classmethods::
+
+method::new
+
+argument::numLatitudes
+The quantity of latitudes. Latitudes are lateral pairs of loudspeakers placed from front to rear of a system. Thus, if you have an 8-channel array in lateral pairs, numLatitudes should be 4.
+argument::frontVal
+The frontmost parameter value. A longitunial curve will stretch from this value to rearVal.
+argument::rearVal
+The rearmost parameter value.
+argument::curveLong
+A positive or negative value.
+This is the shape of the envelope that stretches from front to rear.
+argument::latTiltF
+A positive or negative value of less than 1.
+The tilt of the frontmost latitude.
+argument::latTiltR
+A positive or negative value of less than 1.
+The tilt of the rearmost latitude.
+argument:: widthComp
+An array with which the latitudinal lilts are multiplied, in order to compensate for the difference in width between speakers in, for instance, a circle or oval setup. For instance, if the front and rear is half the width of the two middle latitudes, then an appropriate array may be [0.5,1,1,0.5].
+argument:: length
+Number of iterations of the pattern.
+
+Examples::
+
+code::
+
+//A simple synth to make a texture with
+
+(
+SynthDef(\whiteBPF, {| out=0, freq=1000, bw=0.5, modf=10, modmul=0, amp=0.1 |
+	var noise=WhiteNoise.ar(amp)*SinOsc.kr(modf,mul:modmul,add:1-modmul);
+	var filt=BHiPass4.ar(BBandPass.ar(noise,freq,bw),freq,0.6);
+	Out.ar(out,filt);
+}).add;
+)
+
+~outputs=(0..7)//assuming that channels 0 to 7 are set up pairwise
+//for instance
+//    0  1
+//  2      3
+//  4      5
+//    6  7
+
+//if you want to mock this up in stereo, though the latitide/longitude relationship will be lost, you can just create a repeated stereo, multichannel fake:
+//~outputs=[0,1,0.1,0.1,0.1]
+
+(
+Pmono(\whiteBPF,\out, ~outputs,
+	\times,Pexprand(1,2),//all follow the same temporal breakpoints
+	\freq, PparamLatPairs(
+		numLatitudes:4,
+		frontVal:Pseg(Pexprand(3000,9000),Pkey(\times),\exp),
+		rearVal:Pseg(Pexprand(3000,9000),Pkey(\times),\exp),
+		curveLong:Pseg(Pwhite(-6,6),Pkey(\times),\lin),
+		latTiltF:Pseg(Pwhite(-0.3,0.3),Pkey(\times),\lin),
+		latTiltR:Pseg(Pwhite(-0.3,0.3),Pkey(\times),\lin),
+		length:inf),
+	\modf, PparamLatPairs(
+		numLatitudes:4,
+		frontVal:Pseg(Pexprand(5,20),Pkey(\times),\exp),
+		rearVal:Pseg(Pexprand(5,20),Pkey(\times),\exp),
+	curveLong:Pseg(Pwhite(-6,6),Pkey(\times),\lin),
+		latTiltF:Pseg(Pwhite(-0.3,0.3),Pkey(\times),\lin),
+		latTiltR:Pseg(Pwhite(-0.3,0.3),Pkey(\times),\lin),
+		length:inf),
+	\modmul,1,
+	\bw, PparamLatPairs(
+		numLatitudes:4,
+		frontVal:Pseg(Pexprand(0.01,0.2),Pkey(\times),\exp),
+		rearVal:Pseg(Pexprand(0.01,0.2),Pkey(\times),\exp),
+		curveLong:Pseg(Pwhite(-6,6),Pkey(\times),\lin),
+		latTiltF:Pseg(Pwhite(-0.3,0.3),Pkey(\times),\lin),
+		latTiltR:Pseg(Pwhite(-0.3,0.3),Pkey(\times),\lin),
+		length:inf),
+	\delta, 0.01).play
+)
+
+::

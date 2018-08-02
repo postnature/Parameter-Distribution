@@ -1,0 +1,76 @@
+class:: PparamCellFunc
+summary:: Outputs an array of values, each of which is influenced by the value of its neighbours, by a rule set in a user-supplied function. Successive iteration over an instance of PparamCellFunc can generate a sequence of arrays with values which organise in relation to one another. The class is closely related to PparamCells.
+
+related:: Classes/PparamPeak, Classes/PparamCurve, Classes/PparamField, Classes/PparamLatPairs, Classes/PparamCells, Classes/PparamDeviation, Classes/PparamFeed, Classes/ParamCellFunc
+categories:: Parameter Distribution
+
+Description::
+
+PparamCellFunc is one of several parameter distribution classes intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. The parameter distribution classes offer possibilities for global control of local spatial differentiation, which is useful both in algorithmic composition and live performance. In a mulichannel set-up, each output value can be mapped to an individual synth in a different output channel.
+
+For more details see:
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+classmethods::
+
+method::new
+
+argument::valArray
+An initial array, the size of the quantity of output values desired.
+argument::inVal
+A value that is passed to every new iteration of the cells. This is the equivalent of .next(inVal) in the related class ParamCells. Can be a pattern.
+argument::func
+A function determining how each cell relates to its neighbour. The function is passed the arguments: leftNeighbourValue, thisCellValue, rightNeighbourValue, index. The function needs to return one value.
+argument::minVal
+The minimum output value allowed.Can be a pattern.
+argument::maxVal
+The maximum output value allowed.Can be a pattern.
+argument::length
+Number of iterations of the pattern.
+
+Examples::
+
+code::
+
+
+// a simple synth
+(
+SynthDef(\sin, { | out, freq, phase=0,amp=0.1 |
+	var sin=SinOsc.ar(freq,phase,mul:amp);
+	Out.ar(out,sin)
+}).add
+);
+
+//if you're testing this in stereo you can do a multichannel mock-up using Splay to mix down to stereo, just to get the idea
+
+(
+//this synth is for 8 channels
+SynthDef(\splay8, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, 8);//8 consecutuve channels
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+);
+
+//set your outputs
+~outputs=(0..7); //or whatever your multichannel outputs are
+
+//if mixing down to stereo, add this
+~splay=Synth(\splay8,addAction:\addToTail);
+
+(
+Pmono(\sin, \out, ~outputs,
+	\freq, PparamCellFunc(Array.exprand(8, 5000, 12000),
+	inVal:Pseg(Pbrown(2000,12000,1000), Pexprand(0.5,3.0),\exp),
+	func:{|x,y,z,i|
+	y=[x,z].choose*exprand(0.8,1/0.8);//choose left or right neighbour and multiply with random number
+	0.5.coin.if({y=exprand(2000,12000)}); //a potential error
+			"func".postln;
+	y//output
+	},
+	minVal:2000,
+	maxVal:12000,
+	length:inf),
+	\dur, Pexprand(0.05,0.6)).play
+)
+::
+

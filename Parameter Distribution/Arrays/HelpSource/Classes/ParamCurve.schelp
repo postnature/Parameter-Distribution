@@ -1,0 +1,321 @@
+class:: ParamCurve
+summary:: Generates an array of values based on a curve between two extremities. The class is intended for setting parameters of multiple spatially distributed synths simultanesously.
+
+related:: Classes/ParamPeak, Classes/ParamField, Classes/ParamLatPairs, Classes/ParamCells, Classes/ParamCellFunc, Classes/ParamDeviation, Classes/ParamFeed
+categories:: Parameter Distribution
+
+Description::
+
+ParamCurve is one of several parameter distribution classes intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. If different instances of ParamCurve are generated over time and mapped to the same set of synths, a dynamically moving spatial texture can be created. In a mulichannel set-up, each breakpoint in the envelope corresponds to a channel.
+
+For more details see:
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+classmethods::
+
+method::new
+
+argument::numPoints
+The size of the array (quantity of channels). In topographic synthesis, each point corresponds to a synth outputting to an individual loudspeaker channel in space.
+argument::minVal
+The leftmost value in the curve and array.
+argument::maxVal
+The rightmost value in the curve and array.
+argument::curve
+The curvature of the envelope. This has critical effect on what values are generated at each point of the array. Positive values generates a concave peak; negative a convex.s
+argument::stutter
+This allows for stuttering the output array so that all values are duplicated. Can be useful if you are working in a pair-wise multichannel setup and want to establish lateral equivalence between left and right. in most situations this is likely to be set to default (nil).
+
+Examples::
+
+code::
+
+//A simple synth to make a texture with
+
+(
+SynthDef(\whiteBPF, {| out=0, freq=3000, bw=0.5, modf=10, modmul=0, amp=0.1 |
+	var noise=WhiteNoise.ar(amp)*SinOsc.kr(modf,mul:modmul,add:1-modmul);
+	var filt=BBandPass.ar(noise,freq,bw);
+	Out.ar(out,filt);
+}).add;
+)
+
+//if you're testing this in stereo you can do a multichannel mock-up using Splay to mix down to stereo, just to get the idea
+
+(
+//this synth is for 8 channels
+SynthDef(\splay8, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, 8);//8 consecutuve channels
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+)
+
+~outputs=(0..7)//assuming that channels 0 to 7 are set up in a circle
+
+//array of synths distributed to an 8-channel speaker array.
+
+~synthArray={|i| Synth(\whiteBPF, [\out,~outputs[i]])}!8;
+
+//if mixing down to stereo, add this
+
+~splay=Synth(\splay8,addAction:\addToTail)
+
+//generate an array of frequency values
+
+~freqs=ParamCurve.new(numPoints:8,minVal:3000,maxVal:6000,curve:4)
+
+//gives you this array
+
+[ 3000, 3043.1429975825, 3119.5403999345, 3254.8245343985, 3494.384996852, 3918.5974545677, 4669.7907334507, 6000 ].plot;
+
+//map it to the array of synths
+
+~synthArray.do{|synth,i| synth.set(\freq, ~freqs[i])}
+
+//try generating different arrays by changing peakPos, peakWidth, minVal, maxVal, then map to synths as above.
+
+//off
+~synthArray.do(_.free)
+~splay.free
+
+//a more interactive example
+//three ParamCurve are used for different parameters in the texture
+//this one has faders for minval and maxval and curve
+(
+var stereoMon=true;//set to true if you are monitoring in stereo
+var w,synthArray,splay,freqmin=1000,freqmax=1000,modmulmin=0.001,modmulmax=1.0,bwmin=0.5,bwmax=0.1,curve=2;
+w=Window(bounds:Rect(300,380,300,540));
+w.front;
+w.addFlowLayout;
+
+synthArray={|i| Synth(\whiteBPF, [\out,~outputs[i],\freq,freqmin,\bw,bwmin,\modmul,modmulmin])}!8;
+stereoMon.if({Synth(\splay8,addAction:\addToTail)});
+
+EZSlider(w,90@500,label:"min",controlSpec: ControlSpec(0.0,1.0,\lin,0.001), action:
+	{ | minVal |
+	var freqs, bws, modmuls;
+
+	freqmin=minVal.value.linexp(0,1,1000,10000);
+	modmulmin=minVal.value.linexp(0,1,0.001,1.0);
+	bwmin=minVal.value.linexp(0,1,0.5,0.1);
+
+	freqs=ParamCurve(8,freqmin,freqmax,curve); //generate a new frequency array with 8 points (assuming an 8-channel ring)
+	bws=ParamCurve(8,bwmin,bwmax,curve);//generate a new bandwidth array with 8 points (assuming an 8-channel ring)
+	modmuls=ParamCurve(8,modmulmin,modmulmax,curve);//an array for amplitude modulation depth
+
+	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \bw, bws[i], \modmul,modmuls[i])};
+
+},initVal:0,layout:'vert');
+
+EZSlider(w,90@500,label:"max",controlSpec: ControlSpec(0.0,1.0,\lin,0.001), action:
+	{ | maxVal |
+	var freqs, bws, modmuls;
+
+	freqmax=maxVal.value.linexp(0,1,1000,10000);
+	modmulmax=maxVal.value.linexp(0,1,0.001,1.0);
+	bwmax=maxVal.value.linexp(0,1,0.5,0.1);
+
+	freqs=ParamCurve(8,freqmin,freqmax,curve); //generate a new frequency array with 8 points (assuming an 8-channel ring)
+	bws=ParamCurve(8,bwmin,bwmax,curve);//generate a new bandwidth array with 8 points (assuming an 8-channel ring)
+	modmuls=ParamCurve(8,modmulmin,modmulmax,curve);//an array for amplitude modulation depth
+
+	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \bw, bws[i],\modmul,modmuls[i])};
+
+},initVal:0,layout:'vert');
+
+EZSlider(w,90@500,label:"curve",controlSpec: ControlSpec(-10,10,\lin,0.001), action:
+	{ | val |
+	var freqs,bws,modmuls;
+		curve=val.value;
+	freqs=ParamCurve(8,freqmin,freqmax,curve); //generate a new frequency array with 8 points (assuming an 8-channel ring)
+	bws=ParamCurve(8,bwmin,bwmax,curve);
+	//generate a new bandwidth array with 8 points (assuming an 8-channel ring)
+	modmuls=ParamCurve(8,modmulmin,modmulmax,curve);//an array for amplitude modulation depth
+
+	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \bw, bws[i], \modmul,modmuls[i])};
+
+},initVal:0,layout:'vert');
+)
+//an x/y version
+//x is the leftmost value, y is the rightmost value
+//the vertical fader adjusts the curvature
+(
+var stereoMon=false;//set to true if you are monitoring in stereo
+var w,synthArray,splay,curve=2,freqmin=1000,freqmax=1000,bwmin=0.5,bwmax=0.5,modmulmin=0.001,modmulmax=0.001;
+w=Window("ParamCurve",bounds:Rect(200, 200, 450, 410));
+w.front;
+w.addFlowLayout;
+
+synthArray={|i| Synth(\whiteBPF, [\out,~outputs[i],\freq,1000,\bw,0.5,\modmul,0.001])}!8;
+stereoMon.if({Synth(\splay8,addAction:\addToTail)});
+
+Slider2D(w, 370@370)
+.action_({|xypos|
+	var freqs,bws,modmuls;
+
+	freqmin=xypos.x.value.linlin(0.0,1.0,1000,9000);
+	freqmax=xypos.y.value.linexp(0.0,1.0,1000,9000);
+	bwmin=xypos.x.value.linexp(0,1,0.5,0.1);
+	bwmax=xypos.y.value.linexp(0,1,0.5,0.1);
+	modmulmin=xypos.x.value.linexp(0,1,0.001,1.0);
+	modmulmax=xypos.y.value.linexp(0,1,0.001,1.0);
+
+	freqs=ParamCurve(8,freqmin,freqmax,curve); //generate a new frequency array with 8 points (assuming an 8-channel ring)
+	bws=ParamCurve(8,bwmin,bwmax,curve);
+	//generate a new bandwidth array with 8 points (assuming an 8-channel ring)
+	modmuls=ParamCurve(8,modmulmin,modmulmax,curve);//an array for amplitude modulation depth
+
+	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \bw, bws[i], \modmul,modmuls[i])};
+});
+
+EZSlider(w,60@370,label:"curve",controlSpec: ControlSpec(-10,10,\lin,0.001), action:
+	{ | val |
+	var freqs,bws,modmuls;
+		curve=val.value;
+	freqs=ParamCurve(8,freqmin,freqmax,curve); //generate a new frequency array with 8 points (assuming an 8-channel ring)
+	bws=ParamCurve(8,bwmin,bwmax,curve);
+	//generate a new bandwidth array with 8 points (assuming an 8-channel ring)
+	modmuls=ParamCurve(8,modmulmin,modmulmax,curve);//an array for amplitude modulation depth
+
+	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \bw, bws[i], \modmul,modmuls[i])};
+
+},initVal:0,layout:'vert');
+);
+
+// discontinuous spatial shifts
+// the ParamCurve arrays are indepenent here, with randomly selected values
+// this example also has changing amplitude modulation frequency for accentuating the shifts
+(
+var stereoMon=false;//set to true if you are monitoring in stereo
+var synthArray,splay;
+
+synthArray={|i| Synth(\whiteBPF, [\out,~outputs[i]])}!8;
+stereoMon.if({Synth(\splay8,addAction:\addToTail)});
+
+fork {
+
+	inf.do {
+
+		var pos,modfreq,freqs,bws,modmuls,curve,modfreqscale;
+		curve=rrand(-10,10);
+		modfreq=exprand(5,20);// a new AM freq at every iteration; same for all channels
+		freqs=ParamCurve(numPoints:8,minVal:exprand(4000,12000),maxVal:exprand(4000,12000),curve:curve);
+		bws=ParamCurve(numPoints:8,minVal:exprand(0.1,0.3),maxVal:exprand(0.1,0.3),curve:curve);
+		modmuls=ParamCurve(numPoints:8,minVal:exprand(0.1,1.0),maxVal:exprand(0.1,1.0),curve:curve);
+		modfreqscale=ParamCurve(numPoints:8,minVal:exprand(0.8,1.2),maxVal:exprand(0.8,1.2),curve:curve)*modfreq;
+		synthArray.do{|synth,i| synth.set(\freq, freqs[i], \bw, bws[i], \modf, modfreqscale[i],\modmul,modmuls[i])};
+
+		exprand(0.2,2.0).wait;
+	}
+
+}
+);
+
+// a different synth
+(
+SynthDef(\sinFB, {| out=0, freq=1000, fb=0.0, modf=10, modmul=0, amp=0.1 |
+	var sinfb=SinOscFB.ar(freq,fb,amp)*SinOsc.kr(modf,mul:modmul,add:1-modmul);
+	Out.ar(out,sinfb);
+}).add;
+)
+
+(
+var stereoMon=false;//set to true if you are monitoring in stereo
+var w,synthArray,splay,curve=2,freqmin=1000,freqmax=1000,fbmin=0.5,fbmax=0.5,modmulmin=0.001,modmulmax=0.001;
+w=Window("ParamCurve",bounds:Rect(200, 200, 450, 410));
+w.front;
+w.addFlowLayout;
+
+synthArray={|i| Synth(\sinFB, [\out,~outputs[i],\freq,100,\fb,0.001,\modmul,0.001])}!8;
+stereoMon.if({Synth(\splay8,addAction:\addToTail)});
+
+Slider2D(w, 370@370)
+.action_({|xypos|
+	var freqs,fbs,modmuls;
+
+	freqmin=xypos.x.value.linlin(0.0,1.0,100,200);
+	freqmax=xypos.y.value.linexp(0.0,1.0,100,200);
+	fbmin=xypos.x.value.linexp(0,1,0.001,2.0);
+	fbmax=xypos.y.value.linexp(0,1,0.001,2.0);
+	modmulmin=xypos.x.value.linexp(0,1,0.001,1.0);
+	modmulmax=xypos.y.value.linexp(0,1,0.001,1.0);
+
+	freqs=ParamCurve(8,freqmin,freqmax,curve); //generate a new frequency array with 8 points (assuming an 8-channel ring)
+	fbs=ParamCurve(8,fbmin,fbmax,curve);
+	//generate a new bandwidth array with 8 points (assuming an 8-channel ring)
+	modmuls=ParamCurve(8,modmulmin,modmulmax,curve);//an array for amplitude modulation depth
+
+	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \fb, fbs[i], \modmul,modmuls[i])};
+});
+
+EZSlider(w,60@370,label:"curve",controlSpec: ControlSpec(-10,10,\lin,0.001), action:
+	{ | val |
+	var freqs,fbs,modmuls;
+		curve=val.value;
+	freqs=ParamCurve(8,freqmin,freqmax,curve); //generate a new frequency array with 8 points (assuming an 8-channel ring)
+	fbs=ParamCurve(8,fbmin,fbmax,curve);
+	//generate a new bandwidth array with 8 points (assuming an 8-channel ring)
+	modmuls=ParamCurve(8,modmulmin,modmulmax,curve);//an array for amplitude modulation depth
+
+	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \fb, fbs[i], \modmul,modmuls[i])};
+
+},initVal:0,layout:'vert');
+);
+
+//an impulse texture. Also implements a delay in each channel, scaled with ParamCurve, to reinforce the spatial bias.
+
+(
+SynthDef(\impHPF, {| out, freq, res=0.3, impRate, pw, delay, amp=0.1 |
+	var impulse=DelayL.ar(LFGauss.ar(impRate.reciprocal, pw), delaytime:delay);
+	var hpf=BHiPass4.ar(impulse, freq, res);
+	Out.ar(out,hpf*amp);
+}).add;
+)
+
+(
+var stereoMon=false;//set to true if you are monitoring in stereo
+var w,synthArray,splay,curve=2;
+var freqmin=1000,freqmax=1000,pwsmin=0.001,pwsmax=0.05,delaymin=0.001,delaymax=0.02,resmin=0.1,resmax=0.1;
+w=Window("ParamCurve",bounds:Rect(200, 200, 450, 410));
+w.front;
+w.addFlowLayout;
+
+synthArray={|i| Synth(\impHPF, [\out,~outputs[i],\impRate,40,\freq,3000,\bw,0.01,\modmul,0.001])}!8;
+stereoMon.if({Synth(\splay8,addAction:\addToTail)});
+
+Slider2D(w, 370@370)
+.action_({|xypos|
+	var freqs,pws,delays,ress;
+
+	freqmin=xypos.x.value.linlin(0.0,1.0,200,900);
+	freqmax=xypos.y.value.linexp(0.0,1.0,200,900);
+	pwsmin=xypos.x.value.linexp(0,1,0.01,0.001);
+	pwsmax=xypos.y.value.linexp(0,1,0.01,0.001);
+	delaymin=xypos.x.value.linexp(0,1,0.001,0.02);
+	delaymax=xypos.y.value.linexp(0,1,0.001,0.02);
+	resmin=xypos.x.value.linexp(0,1,0.1,0.5);
+	resmax=xypos.y.value.linexp(0,1,0.1,0.5);
+
+	freqs=ParamCurve(8,freqmin,freqmax,curve);
+	pws=ParamCurve(8,pwsmin,pwsmax,curve);
+	delays=ParamCurve(8,delaymin,delaymax,curve);
+	ress=ParamCurve(8,resmin,resmax,curve);
+	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \res, ress[i], \pw, pws[i], \delay,delays[i])};
+});
+
+EZSlider(w,60@370,label:"curve",controlSpec: ControlSpec(-10,10,\lin,0.001), action:
+	{ | val |
+	var freqs,pws,delays,ress;
+	curve=val.value;
+
+	freqs=ParamCurve(8,freqmin,freqmax,curve);
+	pws=ParamCurve(8,pwsmin,pwsmax,curve);
+	delays=ParamCurve(8,delaymin,delaymax,curve);
+	ress=ParamCurve(8,resmin,resmax,curve);
+
+	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \res, ress[i], \pw, pws[i], \delay,delays[i])};
+
+},initVal:0,layout:'vert');
+);
+
+::

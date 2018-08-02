@@ -1,0 +1,262 @@
+class:: PparamCurve
+summary:: Generates an array of values based on a curve between two extremities. The class is intended for setting parameters of multiple spatially distributed synths simultanesously. This is the pattern version of ParamCurve.
+
+related:: Classes/PparamPeak, Classes/PparamField, Classes/PparamLatPairs, Classes/PparamCells, Classes/PparamCellFunc, Classes/PparamDeviation, Classes/PparamFeed
+categories:: Parameter Distribution
+
+Description::
+
+ParamCurve is one of several parameter distribution patterns intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. If different instances of ParamCurve are generated over time and mapped to the same set of synths, a dynamically moving spatial texture can be created. In a mulichannel set-up, each breakpoint in the envelope corresponds to a channel.
+
+For more details see:
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+classmethods::
+
+method::new
+All the below arguments, except numPoints, can be patterns.
+argument::numPoints
+The size of the array (quantity of channels). In topographic synthesis, each point corresponds to a synth outputting to an individual loudspeaker channel in space.
+argument::minVal
+The leftmost value in the curve and array.
+argument::maxVal
+The rightmost value in the curve and array.
+argument::curve
+The curvature of the envelope. This has critical effect on what values are generated at each point of the array. Positive values generates a concave peak; negative a convex.s
+argument::stutter
+This allows for stuttering the output array so that all values are duplicated. Can be useful if you are working in a pair-wise multichannel setup and want to establish lateral equivalence between left and right. in most situations this is likely to be set to default (nil).
+
+Examples::
+
+code::
+
+//A simple synth to make a texture with
+
+(
+SynthDef(\whiteBPF, {| out=0, freq=1000, bw=0.5, modf=10, modmul=0, amp=0.1 |
+	var noise=WhiteNoise.ar(amp)*SinOsc.kr(modf,mul:modmul,add:1-modmul);
+	var filt=BHiPass4.ar(BBandPass.ar(noise,freq,bw),freq,0.6);
+	Out.ar(out,filt);
+}).add;
+)
+
+//if you're testing this in stereo you can do a multichannel mock-up using Splay to mix down to stereo, just to get the idea
+
+(
+//this synth is for 8 channels
+SynthDef(\splay8, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, 8);//8 consecutuve channels
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+)
+
+~outputs=(0..7)//for the below examples it is assumed that channels 0 to 7 are set up in a circle
+
+//array of synths distributed to an 8-channel speaker array.
+
+(
+//if mixing down to stereo, add this
+
+~splay=Synth(\splay8,addAction:\addToTail);
+
+Pmono(\whiteBPF, \out,~outputs,
+	\times, Pexprand(0.2,1.0),//generating a stream of values to use for the pseg times below
+	\freq, PparamCurve(numPoints:~outputs.size,
+		minVal:Pseg(Pexprand(3000,16000), Pkey(\times), \exp),
+		maxVal:Pseg(Pexprand(3000,16000), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\bw, PparamCurve(numPoints:~outputs.size,
+		minVal:Pseg(Pexprand(0.05,0.5), Pkey(\times), \exp),
+		maxVal:Pseg(Pexprand(0.05,0.5), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\modmul,1,
+	\modf, PparamCurve(numPoints:~outputs.size,
+		minVal:Pseg(Pexprand(2,20), Pkey(\times), \exp),
+		maxVal:Pseg(Pexprand(2,20), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\dur, 0.01
+).play
+
+)
+
+// a different synth
+(
+SynthDef(\sinFB, {| out=0, freq=1000, fb=0.0, modf=10, modmul=0, amp=0.4 |
+	var sinfb=SinOscFB.ar(freq,fb,amp)*SinOsc.kr(modf,mul:modmul,add:1-modmul);
+	Out.ar(out,sinfb);
+}).add;
+)
+
+(
+
+var stereoMon=true;//if mixing down to stereo, set to true
+var numChannels=~outputs.size;//add any number of outputs you like
+var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+stereoMon.if({
+	splaySynth.(numChannels);
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+Pmono(\sinFB, \out,~outputs,
+	\times, Pexprand(0.01,1.0),//generating a stream of values to use for the pseg times below
+	\freq, PparamCurve(numPoints:numChannels,
+		minVal:Pseg(Pexprand(40,400), Pkey(\times), \exp),
+		maxVal:Pseg(Pexprand(40,400), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\fb, PparamCurve(numPoints:numChannels,
+		minVal:Pseg(Pexprand(0.1,2.0), Pkey(\times), \exp),
+		maxVal:Pseg(Pexprand(0.1,2.0), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\modmul,1,
+	\modf, PparamCurve(numPoints:numChannels,
+		minVal:Pseg(Pexprand(2,10), Pkey(\times), \exp),
+		maxVal:Pseg(Pexprand(2,10), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\dur, 0.01
+).play
+
+)
+
+//an impulse texture. Also implements a delay in each channel
+
+(
+SynthDef(\impHPF, {| out, freq=200,res=0.3, impRate=20, pw=0.01, delay=0, amp=1 |
+
+	var impulse=DelayL.ar(LFGauss.ar(impRate.reciprocal, pw), delaytime:delay);
+	var hpf=BHiPass4.ar(impulse, freq, res);
+	Out.ar(out,hpf*amp);
+}).add;
+)
+
+(
+//if mixing down to stereo, add this
+
+var stereoMon=true;//if mixing down to stereo, set to true
+var numChannels=~outputs.size;//add any number of outputs you like
+var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+stereoMon.if({
+	splaySynth.(numChannels);
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+Pmono(\impHPF, \out,~outputs,
+	\times, Pexprand(0.05,1.0),//generating a stream of values to use for the pseg times below
+	\impRate, Pseg(Pexprand(5,200), Pkey(\times), \exp),
+	\freq, PparamCurve(numPoints:numChannels,
+		minVal:Pseg(Pbrown(40,1000,400), Pkey(\times), \exp),
+		maxVal:Pseg(Pbrown(40,1000,400), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+    \res,PparamCurve(numPoints:numChannels,
+		minVal:Pseg(Pexprand(0.05,0.5), Pkey(\times), \exp),
+		maxVal:Pseg(Pexprand(0.05,0.5), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\pw, PparamCurve(numPoints:numChannels,
+		minVal:Pseg(Pwhite(0.003,0.05), Pkey(\times), \exp),
+		maxVal:Pseg(Pwhite(0.003,0.05), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\delay, PparamCurve(numPoints:numChannels,
+		minVal:Pseg(Pexprand(0.001,0.05), Pkey(\times), \exp),
+		maxVal:Pseg(Pexprand(0.001,0.05), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\dur, 0.01
+).play
+
+)
+//a synth for single grains
+(
+SynthDef(\sinimps,{|out=0,freq=1000,impf=10,modgliss=0.5,grainAtt=0.01,att=0.01,release=0.2|
+	var imp=Impulse.kr(Env([impf,impf*modgliss],[release],\exp).kr);
+	var sin=SinOsc.ar(freq)*Env.perc(grainAtt,grainAtt*2).kr(gate:imp);
+	var env=Env.perc(attackTime:att,releaseTime:release).kr(doneAction:2);
+	Out.ar(out, sin*env);
+}).add;
+)
+//every temporal event (grain) consists of as many spatially distributed grains as there are channels
+(
+var stereoMon=true;//if mixing down to stereo, set to true
+var numChannels=~outputs.size;//add any number of outputs you like
+var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+stereoMon.if({
+	splaySynth.(numChannels);
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+Pbind(\instrument, \sinimps, \out,~outputs,
+	\times, Pexprand(0.5,2.0),//generating a stream of values to use for the pseg times below
+	\freq, PparamCurve(numPoints:numChannels,
+		minVal:Pbrown(400,4000,100),
+		maxVal:Pbrown(400,4000,100),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\att,PparamCurve(numPoints:numChannels,
+		minVal:Pexprand(0.001,0.02),
+		maxVal:Pexprand(0.001,0.02),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\impf, PparamCurve(numPoints:numChannels,
+		minVal:Pseg(Pexprand(10,80), Pkey(\times), \exp),
+		maxVal:Pseg(Pexprand(10,80), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+    \grainAtt,PparamCurve(numPoints:numChannels,
+		minVal:Pseg(Pexprand(0.0001,0.01), Pkey(\times), \exp),
+		maxVal:Pseg(Pexprand(0.0001,0.01), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\modgliss, PparamCurve(numPoints:numChannels,
+		minVal:Pseg(Pexprand(0.5,2.0), Pkey(\times), \exp),
+		maxVal:Pseg(Pexprand(0.5,2.0), Pkey(\times), \exp),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\release, PparamCurve(numPoints:numChannels,
+		minVal:Pexprand(0.05,0.5),
+		maxVal:Pexprand(0.05,0.5),
+		curve:Pseg(Pwhite(-6,6), Pkey(\times), \lin),
+		stutter:nil,
+		length:inf),
+	\delta, Pexprand(0.025,0.6)
+).play
+
+)
+
+::

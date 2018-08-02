@@ -1,0 +1,286 @@
+class:: ParamPeakWarp
+summary:: Generates an array of values based on a  peak envelope. The envelope can be positioned relative to the indices of the array continuously. However, unlike the related class ParamPeak, it does not wrap, but instead warps as it reaches the edges of the array. The class is intended for setting parameters of multiple spatially distributed synths simultanesously, to create spatial bias in texture.
+
+related:: Classes/ParamPeak, Classes/ParamCurve, Classes/ParamField, Classes/ParamLatPairs, Classes/ParamCells, Classes/ParamCellFunc, Classes/ParamDeviation, Classes/ParamFeed
+categories:: Parameter Distribution
+
+Description::
+
+ParamPeakWarp is one of several parameter distribution classes intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. The parameter distribution classes offer possibilities for global control of local spatial differentiation, which is useful both in algorithmic composition and live performance. In a mulichannel set-up, each output value can be mapped to an individual synth in a different output channel. If different instances of ParamPeakWarp are generated over time and mapped to the same set of synths, a dynamically moving spatial texture can be created. In high density speaker arrays one can achieve 'timbral panning' by moving the peak position continuously across the channels.
+
+For more details see:
+Nyström, E., 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of ICMC 2018, Daegu, Korea.
+
+classmethods::
+
+method::new
+
+argument::numPoints
+The size of the array (quantity of channels). In topographic synthesis, each point corresponds to a synth outputting to an individual loudspeaker channel in space.
+argument::peakPos
+A value between 0 and numPoints-1. The position of the envelope peak, corresponding to an index in the array and its respective synth/output channel.
+argument::minVal
+The value at the edge of the peak and any points laying outside of the peak, if the peak is smaller than the whole array.
+argument::maxVal
+The value at the centre of the peak.
+argument::curve
+The curvature of the envelope. This has critical effect on what values are generated at each point of the array. Positive values generates a concave peak; negative a convex.
+
+Examples::
+
+code::
+
+//A simple synth to make a texture with
+
+(
+SynthDef(\whiteBPF, {| out=0, freq=1000, bw=0.5, modf=10, modmul=0, amp=0.1 |
+	var noise=WhiteNoise.ar(amp)*SinOsc.kr(modf,mul:modmul,add:1-modmul);
+	var filt=BHiPass4.ar(BBandPass.ar(noise,freq,bw),freq,0.6);
+	Out.ar(out,filt);
+}).add;
+)
+
+//if you're testing this in stereo you can do a multichannel mock-up using Splay to mix down to stereo, just to get a rough idea. Note, however, that this will flatten the circle to a one-dimensional array between left and right.
+
+(
+//this synth is for 8 channels
+SynthDef(\splay8, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, 8);//8 consecutuve channels
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+)
+
+~outputs=(0..7)//assuming that channels 0 to 7 are setup in a circle
+
+//array of synths distributed to an 8-channel speaker array.
+
+~synthArray={|i| Synth(\whiteBPF, [\out,~outputs[i]])}!8;
+
+//if mixing down to stereo, add this
+
+~splay=Synth(\splay8,addAction:\addToTail)
+
+//generate an array of frequency values
+
+~freqs=ParamPeakWarp.new(numPoints:8,peakPos:2,minVal: 3000,maxVal: 6000,curve: 2);
+
+//gives you this array with the peak is at index 2
+
+[ 3000, 3806.82426411, 6000, 4856.157950338, 4089.417694951, 3575.4563316626, 3230.9377269626, 3000 ].plot;
+
+//map it to the array of synths
+
+~synthArray.do{|synth,i| synth.set(\freq, ~freqs[i])}
+
+//try generating different arrays by changing peakPos, peakWidth, minVal, maxVal, then map to synths as above.
+
+//off
+~synthArray.do(_.free)
+~splay.free
+
+//compare ParamPeak and ParamPeakWarp
+
+ParamPeakWarp.new(numPoints:8,peakPos:2,minVal: 3000,maxVal: 6000,curve: 2).plot;
+ParamPeak.new(numPoints:8,peakWidth:4,peakPos:2,minVal: 3000,maxVal: 6000,curve: 2).plot;
+
+//a more interactive example
+//three ParamPeakWarp are used for different parameters in the texture
+//x is position (for all parameters), y is the height of the peak
+//bumps are audible in continuous panning since the parameters don't add up like amplitude does in amplitude panning. However greater number of channels reduce bumpiness.
+//adjust curve fader negative values are wider, positive narrower
+(
+var outputs=(0..63);//set your number of outputs: the more the better!
+var stereoMon=true;//set to true if you are monitoring in stereo
+var numChannels=outputs.size;
+var w,synthArray,splay,curve=0;
+var splaySynth = { |numChannels|
+	SynthDef((\splay++numChannels).asSymbol, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+
+w=Window("ParamPeakWarp",bounds:Rect(200, 200, 410, 240));
+w.front;
+w.addFlowLayout;
+
+synthArray={|i| Synth(\whiteBPF, [\out,outputs[i],\freq,3000,\bw,0.01,\modmul,0.001])}!numChannels;
+stereoMon.if({
+	splaySynth.(numChannels);//create splay synth;
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+Slider2D(w, 400@100)
+.action_({|xypos|
+
+	var pos,freqmax,bwmax,modmulmax,freqs,bws,modmuls;
+	//
+	pos=xypos.x.value.linlin(0.0,1.0,0.0,numChannels-1);
+	freqmax=xypos.y.value.linexp(0,1,3000,9000);
+	bwmax=xypos.y.value.linexp(0,1,0.01,0.8);
+	modmulmax=xypos.y.value.linexp(0,1,0.01,1.0);
+
+	freqs=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 3000,maxVal: freqmax,curve: curve); //generate a new frequency array with 8 points (assuming an 8-channel ring)
+	bws=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 0.01,maxVal: bwmax,curve: curve);
+	//generate a new bandwidth array with 8 points (assuming an 8-channel ring)
+	modmuls=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 0.001,maxVal: modmulmax,curve: curve);//an array for amplitude modulation depth
+	freqs.postln;
+	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \bw, bws[i], \modmul,modmuls[i])};
+});
+
+EZSlider(w, 400@80,"curve",ControlSpec(-20,20,step:1), action:{|val|
+	curve=val.value;
+
+},initVal:curve,initAction:true,layout:'horz');
+
+)
+
+// discontinuous spatial shifts.
+// this example also has changing amplitude modulation frequency for accentuating the shifts in bias
+(
+
+var outputs=(0..7);//set your outputs
+var stereoMon=true;//set to true if you are monitoring in stereo
+var numChannels=outputs.size;
+var w,synthArray,splay, widths=(2,4..numChannels);
+var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+synthArray={|i| Synth(\whiteBPF, [\out,outputs[i]])}!numChannels;
+stereoMon.if({
+	splaySynth.(numChannels);//create splay synth;
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+fork {
+
+	inf.do {
+
+		var pos,modfreq,freqs,bw,modmul,curve;
+		curve=rrand(-4,4);//a randomly selected curve value; same for all
+		pos=7.0.rand;//peak position in the speaker array
+		modfreq=exprand(5,20);// a new AM freq at every iteration; same for all channels
+		freqs=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 4000,maxVal: 9000,curve: curve);
+		bw=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 0.01,maxVal: 0.4,curve: curve);
+		modmul=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 0.001,maxVal: 1.0,curve: curve);
+		synthArray.do{|synth,i| synth.set(\freq, freqs[i], \bw, bw[i], \modf, modfreq,\modmul,modmul[i])};
+
+		exprand(0.2,2.0).wait;
+	}
+
+}
+);
+
+// a different synth
+(
+SynthDef(\sinFB, {| out=0, freq=1000, fb=0.0, modf=10, modmul=0, amp=0.1,delaytime=0 |
+	var sinfb=SinOscFB.ar(freq,fb,amp)*SinOsc.kr(modf,mul:modmul,add:1-modmul);
+	var delay=DelayL.ar(sinfb,delaytime:delaytime);
+	Out.ar(out,sinfb);
+}).add;
+);
+
+//adjust peak to a high value to get smoother value
+//this uses delays as well to scale the wave fronts.
+(
+var outputs=(0..7);//set your number of outputs:
+var stereoMon=true;//set to true if you are monitoring in stereo
+var numChannels=outputs.size;
+var w,synthArray,splay,curve=0;
+var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+splaySynth.(numChannels);//create splay synth;
+w=Window("ParamPeak",bounds:Rect(200, 200, 410, 240));
+w.front;
+w.addFlowLayout;
+
+synthArray={|i| Synth(\sinFB, [\out,outputs[i],\freq,100,\fb,0.01,\modmul,0.001])}!numChannels;
+stereoMon.if({
+
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+Slider2D(w, 400@100)
+.action_({|xypos|
+
+	var pos,freqmax,fbmax,modmulmax,freqs,fbs,modmuls,delaymax,delays;
+	//
+	pos=xypos.x.value.linlin(0.0,1.0,0.0,numChannels-1);
+	freqmax=xypos.y.value.linexp(0,1,100,600);
+	fbmax=xypos.y.value.linexp(0,1,0.01,2);
+	modmulmax=xypos.y.value.linexp(0,1,0.01,1.0);
+	delaymax=xypos.y.value.linexp(0,1,0.05,0.0001);//least delay at peak
+	freqs=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 100,maxVal: freqmax,curve: curve); //generate a new frequency array with 8 points (assuming an 8-channel ring)
+	fbs=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 0.01,maxVal: fbmax,curve: curve);
+	//generate a new bandwidth array with 8 points (assuming an 8-channel ring)
+	modmuls=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 0.001,maxVal: modmulmax,curve: curve);//an array for amplitude modulation depth
+	delays=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 0.05,maxVal: delaymax,curve: curve);
+	freqs.postln;
+	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \fb, fbs[i], \modmul,modmuls[i],\delaytime,delays[i])};
+});
+
+EZSlider(w, 400@80,"curve",ControlSpec(-20,20,step:1), action:{|val|
+	curve=val.value;
+
+},initVal:0,initAction:true,layout:'horz');
+
+);
+
+//impulse texture. Also implements a delay in each channel, scaled with ParamPeakWarp, to reinforce the spatial bias.
+
+(
+SynthDef(\impHPF, {| out, freq, res=0.3, impRate, pw, delay, amp=0.1 |
+	var impulse=DelayL.ar(LFGauss.ar(impRate.reciprocal, pw), delaytime:delay);
+	var hpf=BHiPass4.ar(impulse, freq, res);
+	Out.ar(out,hpf*amp);
+}).add;
+)
+
+(
+var outputs=(0..31);//set your outputs
+var stereoMon=true;//set to true if you are monitoring in stereo
+var numChannels=outputs.size;
+var w,synthArray,splay;
+var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+
+w=Window("ParamPeakWarp",bounds:Rect(200, 200, 410, 140));
+w.front;
+w.addFlowLayout;
+
+synthArray={|i|Synth(\impHPF, [\out,outputs[i], \freq, 3000,\res,0.3, \impRate, 40,\pw, 0.1]);}!numChannels;
+
+stereoMon.if({
+	splaySynth.(numChannels);//create splay synth;
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+Slider2D(w, 400@100)
+.action_({|xypos|
+	var pos,freqmax,pwmax,delaymax,resmax, ress,freqs,pws,modmuls,delays;
+	pos=xypos.x.value.linlin(0.0,1.0,0.0,numChannels-1);
+	freqmax=xypos.y.value.linexp(0,1,200,900);
+	pwmax=xypos.y.value.linexp(0,1,0.001,0.05);
+	delaymax=xypos.y.value.linexp(0,1,0.1,0.0001);
+	resmax=xypos.y.value.linexp(0,1,0.1,0.5);
+
+	freqs=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 200,maxVal: freqmax,curve: -2);
+	pws=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 0.001,maxVal: pwmax,curve: -2);
+	delays=ParamPeakWarp(numPoints:numChannels,peakPos:pos,minVal: 0.001,maxVal: delaymax,curve: -2);
+	ress=ParamPeak(numPoints:numChannels,peakPos:pos,minVal: 0.1,maxVal: resmax,curve: -2);
+
+	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \res, ress[i], \pw, pws[i], \delay,delays[i])};
+})
+)
+

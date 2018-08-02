@@ -1,0 +1,47 @@
+class:: ParamField
+summary:: Generates an array of values derived from an envelope, intended for lateral and longitudinal grouping of parameters for synthesis processes distributed in a multichannel loudspeaker array. An envelope is created for the longitude (front to rear) of the multi-channel system, along which latitude envelopes are placed. The difference between ParamField and ParamLatPairs is that ParamField can serve grid speaker layouts which have more than two channels in each latitude.
+
+related:: Classes/ParamPeak, Classes/ParamCurve, Classes/ParamLatPairs, Classes/ParamCells, Classes/ParamCellFunc, Classes/ParamDeviation, Classes/ParamFeed
+categories:: Parameter Distribution
+
+Description::
+
+ParamField is one of several parameter distribution classes intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. The parameter distribution classes offer possibilities for global control of local spatial differentiation, which is useful both in algorithmic composition and live performance. In a mulichannel set-up, each output value can be mapped to an individual synth in a different output channel. If different instances of ParamField are generated over time and mapped to the same set of synths, a dynamically moving spatial texture can be created.
+
+For more details regarding parameter distrubution and synthesis see:
+
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+
+For more on spatial dimensions (latitudes and longitudes) see:
+
+Nyström, E. (2015) 'Low-Level Topology of Spatial Texture' Proceedings of ICMC 2015, Denton, Texas, US.
+
+classmethods::
+
+method::new
+
+argument::numLatitudes
+The quantity of latitudes. Latitudes are sideways arrays of loudspeakers. For instance, a 16 channel grid in 4 by 4 layout, would have 4 latitudes.
+argument::numLongitudes
+The quantity of longitudes. Longitudes are arrays of loudspeakers reaching from front to rear of a system. For instance, a 16 channel grid in 4 by 4 layout, would have 4 longitudes.
+argument::frontVal
+The frontmost parameter value. A longitunial curve will stretch from this value to rearVal.
+argument::rearVal
+The rearmost parameter value.
+argument::curveLong
+A positive or negative value.
+This is the shape of the envelope that stretches from front to rear.
+argument::latTiltF
+A positive or negative value of less than 1.
+The tilt of the frontmost latitude.
+argument::latTiltR
+A positive or negative value of less than 1.
+The tilt of the rearmost latitude.
+argument::curveLat
+A positive or negative value.
+This is the shape of the envelope that stretches side to side.
+argument::latCurveWarp
+A ratio of < or >1 which determines a gradual change of curveLat for each latitude from front to rear.
+argument:: widthComp
+An array with which the latitudinal lilts are multiplied, in order to compensate for the difference in width between speakers in, for instance, a circle or oval setup. For instance, if the front and rear is half the width of the two middle latitudes, then an appropriate array may be [0.5,1,1,0.5].

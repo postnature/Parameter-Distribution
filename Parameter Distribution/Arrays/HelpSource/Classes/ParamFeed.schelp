@@ -1,0 +1,183 @@
+class:: ParamFeed
+summary:: A space-time data feedback system which generates an array of values, each of which is influenced by the value of its left neighbour and its previous state. Successive iteration over an instance of ParamFeed will generate a sequence of arrays with values which grow or diminish in relation to one another.
+
+related:: Classes/ParamPeak, Classes/ParamCurve, Classes/ParamField, Classes/ParamLatPairs, Classes/ParamCellFunc, Classes/ParamDeviation
+categories:: Parameter Distribution
+
+Description::
+
+ParamFeed is one of several parameter distribution classes intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. The parameter distribution classes offer possibilities for global control of local spatial differentiation, which is useful both in algorithmic composition and live performance. In a mulichannel set-up, each output value can be mapped to an individual synth in a different output channel.
+
+For more details see:
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+classmethods::
+
+method::new
+
+argument::numPoints
+The size of the array (quantity of channels). In topographic synthesis, each point corresponds to a synth outputting to an individual loudspeaker channel in space.
+argument::minVal
+The minimum output value allowed. Values fold at minVal.
+argument::maxVal
+The maximum output value allowed. Values fold at maxVal.
+argument::inValMul
+A multiplier for inVal, determining how much of inVal to introduce into the output array. This argument does nothing if set to 1.
+argument::accumFeedMul
+A fraction determining the spatial feeding of values through the array: how much inVal increases successively across the array in one iteration. This argument does nothing if set to 0.
+argument::prevFeedMul
+A fraction determining the temporal feeding of values through  iterations: how much of the previous value at each index of the array is carried forward to the next iteration. This argument does nothing if set to 0.
+argument::deviation
+A fraction determining a maximum random multiplier for each value.
+
+instancemethods::
+NB. All the arguments for class method .new have getters and setters so that a instance of ParamCells can be updated.
+
+method:: next
+argument::inVal
+An input value which is input to the first index of the array and then propagated across all indices according to the specified arguments. If inValMul, accumFeedMul and/or prevFeedMul are set to more or less than 1, inVal will not be present in the output array (unless it's the first iteration).
+returns:: a new array of values.
+discussion::
+code::
+//instantiate an 8-channel ParamFeed
+x=ParamFeed(numPoints:8,minVal:1.0,maxVal:2.0,inValMul:1.0,accumFeedMul:0.01,prevFeedMul:0.01,deviation:0)
+//keep iterating to see how the output changes
+x.next(1.1);
+x.deviation=0.1;//add some randomisation
+x.accumFeedMul=0.2;//change the spatial feed-through
+x.prevFeedMul=0.2;//add the temporal feedback
+::
+
+
+method::nextCell
+
+argument::inVal
+An input value at specified index of the array. If inValMul, accumFeedMul and/or prevFeedMul are set to more or less than 1, inVal will not be present in the output array (unless it's the first iteration).
+argument::index
+The index in the array to and output. Must be a value between 0 and numPoints-1.
+returns:: a single value
+
+discussion::
+code::
+//instantiate an 8-channel ParamFeed
+x=ParamFeed(numPoints:8,minVal:1.0,maxVal:2.0,inValMul:1.0,accumFeedMul:0.1,prevFeedMul:0.2,deviation:0);
+//keep iterating to see how the output changes
+x.nextCell(1.8,3);//one value at index 3
+x.next(1.1);//note that there's a trace of the entry at index 3 and beyond in the next whole array output
+
+::
+Examples::
+
+code::
+
+// a simple synth
+(
+SynthDef(\sin, { | out, freq, phase=0,amp=0.1 |
+	var sin=SinOsc.ar(freq,phase,mul:amp);
+	Out.ar(out,sin)
+}).add
+);
+
+//if you're testing this in stereo you can do a multichannel mock-up using Splay to mix down to stereo, just to get the idea
+
+(
+//this synth is for 8 channels
+SynthDef(\splay8, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, 8);//8 consecutuve channels
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+);
+
+// a simple mapping example
+//set your outputs
+~outputs=(0..7); //or whatever your multichannel outputs are
+
+//array of synths distributed to an 8-channel speaker array.
+~synthArray={|i| Synth(\sin, [\out,~outputs[i],\freq,200,\amp,0.1])}!8;
+
+//if mixing down to stereo, add this
+~splay=Synth(\splay8,addAction:\addToTail);
+
+//instantiate a ParamCells for phase values
+~phaseFeed=ParamFeed(numPoints:8,minVal:0,maxVal:8pi,inValMul:1,accumFeedMul:0.2,prevFeedMul:0.1,deviation:0);
+
+//a function for iterating the cells and updating the synths
+(
+~updateFunc={ |val,synthArray,phaseFeed|
+	var phases=phaseFeed.next(val);//generate a new array;
+	phases.postln;
+	synthArray.do{|synth,i| synth.set(\phase,phases[i])}//update the synths
+}
+)
+//iterate this to hear a gradually shifting perspective
+~updateFunc.(0.2,~synthArray,~phaseFeed)
+
+//a basic spectral texture
+//every move on the "freq" fader will iterate the ParamCells and map the output values to the array of synths
+//adjust the warp fader to bias the output values towards or away from centre
+//the button on top sets wether to update with .next (all channels at once), or .nextCells (one at a time)
+(
+var outs=~outputs;//add any number of channels you like.
+var numChannels=outs.size;
+var stereoMon=true;//set to true if you're monitoring this in stereo
+var allCells=true;
+var group=Group();
+			var synths={|i|Synth(\sin, [\out,outs[i],\freq,2000,\amp,0.01],target:group)}!numChannels;
+var freqfeed=ParamFeed(numPoints:numChannels,minVal:2000,maxVal:12000,inValMul:1,accumFeedMul:0.1,prevFeedMul:0.1,deviation:0.01);
+
+			var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+
+stereoMon.if({
+	splaySynth.(numChannels);//create splay synth;
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+w=Window("ParamCells",bounds:Rect(200, 200, 480, 480));
+w.front;
+w.addFlowLayout;
+
+Button(w, 470@80).states_([ ["all channels at once",Color.white, Color.black], ["one channel at a time",Color.black, Color.white] ]).action_({|button|
+
+	switch(button.value,
+		0, {allCells=true},
+		1, {allCells=false}
+	)});
+
+EZSlider(w,90@350,"freq",controlSpec:ControlSpec(minval:2000,maxval:12000,warp:\exp,step:1,units:\freq), action:{|val|
+	val.value.postln;
+	switch(allCells,
+		true, {var freqs=freqfeed.next(val.value);
+						freqs.postln;
+				synths.do{|synth,i|synth.set(\freq,freqs[i])};
+		},
+		false, {
+			var index=numChannels.rand;
+			var freq=freqfeed.nextCell(val.value,index);
+				synths[index].set(\freq,freq)
+	})
+},layout:'vert');
+
+EZSlider(w,90@350,"inValMul",controlSpec:ControlSpec(minval:0,maxval:2.0,warp:\lin), action:{|val|
+	freqfeed.inValMul=val.value;
+},initVal:0.1,initAction:true,layout:'vert');
+
+EZSlider(w,90@350,"accumFeedMul",controlSpec:ControlSpec(minval:0,maxval:1.0,warp:\lin), action:{|val|
+	freqfeed.accumFeedMul=val.value;
+},initVal:0.1,initAction:true,layout:'vert');
+
+EZSlider(w,90@350,"prevFeedMul",controlSpec:ControlSpec(minval:0,maxval:1.0,warp:\lin), action:{|val|
+	freqfeed.prevFeedMul=val.value;
+},initVal:0.1,initAction:true,layout:'vert');
+
+EZSlider(w,90@350,"deviation",controlSpec:ControlSpec(minval:0,maxval:1.0,warp:\lin), action:{|val|
+	freqfeed.deviation=val.value;
+},initVal:0,initAction:true,layout:'vert');
+
+)
+
+::

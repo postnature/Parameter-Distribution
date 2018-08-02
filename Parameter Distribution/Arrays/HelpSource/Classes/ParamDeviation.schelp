@@ -1,0 +1,146 @@
+class:: ParamDeviation
+summary:: Generates an array of values deviating from a given mean, by user-set distribution and deviation range.It is intended for distrubuting parameter settings in multichannel synthesis.
+
+related:: Classes/ParamPeak, Classes/ParamCurve, Classes/ParamField, Classes/ParamLatPairs, Classes/ParamCells, Classes/ParamCellFunc
+categories:: Parameter Distribution
+
+Description::
+
+ParamDeviation is one of several parameter distribution classes intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. In a mulichannel set-up, each output value can be mapped to an individual synth in a different output channel. The parameter distribution classes offer possibilities for global control of local spatial differentiation, which is useful both in algorithmic composition and live performance.
+
+For more details see:
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+classmethods::
+
+method::new
+
+argument::numPoints
+The size of the array (quantity of channels). In topographic synthesis, each point corresponds to a synth outputting to an individual loudspeaker channel in space.
+argument::val
+An input value from which an array of deviations are generated.
+argument::deviation
+The range of deviation from the given mean value. The number is a fractional multiple.
+argument::scaleArray
+An optional array of numbers to multiply the output values with. Leave at nil if no scaling is desired.
+argument::dist
+A symbol indicating the probability disribution to be used: code::\lin,\exp,\gauss,\cauchy,\logistic::
+argument::boundary
+A symbol indicating what happens when a value generated is outside the range between minVal and maxVal: \clip, \fold, \wrap
+argument::minVal
+The minimum output value allowed.
+argument::maxVal
+The maximum output value allowed.
+
+Examples::
+
+code::
+
+(
+SynthDef(\gaussgrain, {| out,freq, dur, width,amp=0.1 |
+
+	var osc=SinOsc.ar(freq);
+	var grain=osc*LFGauss.ar(dur,width,loop:0,doneAction:2);
+	OffsetOut.ar(out, grain*amp)
+}).add;
+);
+
+
+~outputs=(0..7); //or whatever your multichannel outputs are
+
+// grains in all channels are generated at every iteration of the texture
+// the differentiation between the spatially distributed grains is created with instances of ParamDeviation
+(
+var stereoMon=false;
+var group=Group();
+var numChannels=~outputs.size;
+var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+
+stereoMon.if({
+	splaySynth.(numChannels);//create splay synth;
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+
+fork {
+
+	var freq=exprand(200,12000);
+	var dur=exprand(0.005,0.1);
+	var delta=exprand(0.02,0.3);
+
+	inf.do{
+		var freqs, widths,durs;
+		dur=(dur*(exprand(0.8,1/0.8))).fold(0.005,0.1);
+		freq=(freq*(exprand(0.8,1/0.8))).fold(200,12000);
+		delta=(delta*(exprand(0.8,1/0.8))).fold(0.02,0.3);
+		freqs=ParamDeviation(numChannels,val:freq,deviation: 0.2,minVal:200,maxVal:12000);
+		durs=ParamDeviation(numChannels,val:dur,deviation: 0.2,minVal:0.005,maxVal:0.1);
+		widths=ParamDeviation(numChannels,val:exprand(0.001,0.1),deviation: 0.2,minVal:0.001,maxVal:0.05);
+		{|i|Synth(\gaussgrain,[\out,~outputs[i],\freq,freqs[i],\dur,durs[i],\width,widths[i]],target:group)}!numChannels;
+		"mean freq ".postf;freq.postln;
+		"freq deviations ".postf;freqs.postln;
+		delta.wait;
+	}
+}
+)
+
+// similar synth but generating streams rather than single grains
+(
+SynthDef(\gaussgrain_stream, {| out,freq, dur, width,amp=0.1 |
+
+	var osc=SinOsc.ar(Lag.kr(freq,0.025));
+	var grain=osc*LFGauss.ar(dur,width,loop:1);
+	Out.ar(out, grain*amp)
+}).add;
+);
+
+//here ParamCurve is used for the scaleArray argument, to scale frequency and width gradually along the channels
+// impulse rate (reciprocal of dur) varies only slightly between channels
+(
+var stereoMon=false;//set to true if you want to monitor in stereo
+var group=Group();
+var synths;
+var numChannels=~outputs.size;
+var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+
+synths={|i|Synth(\gaussgrain_stream,[\out,~outputs[i],\freq,1000,\dur,0.05,\width,0.1],group)}!numChannels;
+
+stereoMon.if({
+	splaySynth.(numChannels);//create splay synth;
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+fork {
+
+	var freq=exprand(3000,12000);
+	var dur=exprand(0.015,0.1);
+	var delta=exprand(0.1,0.9);
+
+	inf.do{
+		var freqs,durs, widths,scaleArray;
+		dur=(dur*(exprand(0.8,1/0.8))).fold(0.015,0.1);
+		freq=(freq*(exprand(0.8,1/0.8))).fold(3000,12000);
+		delta=(delta*(exprand(0.8,1/0.8))).fold(0.1,0.9);
+		scaleArray=ParamCurve(numChannels, 1,maxVal:exprand(0.5,2.0),curve:rrand(-2.0,2.0));
+		freqs=ParamDeviation(numChannels,val:freq,deviation: 0.2,scaleArray:scaleArray,minVal:3000,maxVal:12000);
+		durs=ParamDeviation(numChannels,val:dur,deviation: 0.005,scaleArray:nil,minVal:0.015,maxVal:0.1);
+		widths=ParamDeviation(numChannels,val:(dur*(exprand(0.7,1.0))).wrap(0.001,0.05),deviation: 0.1,scaleArray:scaleArray,minVal:0.001,maxVal:0.05);
+		synths.do{|synth,i|synth.set(\freq,freqs[i],\width, widths[i], \dur,durs[i])};
+		"mean freq ".postf;freq.postln;
+		"freq deviations ".postf;freqs.postln;
+		delta.wait;
+	}
+}
+)
+
+::

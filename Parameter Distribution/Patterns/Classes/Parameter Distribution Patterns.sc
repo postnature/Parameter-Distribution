@@ -1,6 +1,4 @@
-//ex. rotate
-//p=PparamPeak(numPoints:8,peakWidth:4,peakPos:Pn(Penv([0,8],[2]),inf),minVal:1,maxVal:6,curve:2,length:inf).asStream
-//p.next
+//(c) 2018 Erik Nyström, published under GNU General Public License, GPLv3.
 
 PparamPeak : Pattern {
 	var <>numPoints, <>peakWidth,<>peakPos,<>minVal,<>maxVal,<>curve, <>length;
@@ -28,9 +26,6 @@ PparamPeak : Pattern {
 	}
 }
 
-//rotate
-//p=PparamPeakWarp(numPoints:8,peakPos:Pn(Penv([0,8],[2]),inf),minVal:1,maxVal:6,curve:2,length:inf).asStream
-//p.next
 
 PparamPeakWarp : Pattern {
 	var <>numPoints, <>peakPos,<>minVal,<>maxVal,<>curve, <>length;
@@ -58,9 +53,6 @@ PparamPeakWarp : Pattern {
 	}
 }
 
-//p=PparamCurve(numPoints:8,minVal:Pexprand(0.5,1.0),maxVal:1.1,curve:2.neg,stutter:nil,length:inf).asStream
-//p.next
-
 PparamCurve : Pattern {
 	var <>numPoints, <>minVal, <>maxVal, <>curve, stutter, <>length;
 	*new { arg numPoints, minVal, maxVal, curve, stutter=nil, length;
@@ -83,9 +75,6 @@ PparamCurve : Pattern {
 		^inval;
 	}
 }
-
-//p=PparamLatPairs(numLatitudes:4,frontVal:1,rearVal:2,curveLong:2,latTiltF:0.2,latTiltR:-0.2,widthComp:nil,length:inf).asStream
-//p.next
 
 PparamLatPairs : Pattern {
 	var <>numLatitudes, <>frontVal, <>rearVal, <>curveLong, <>latTiltF,<>latTiltR,<>widthComp, <>length;
@@ -123,9 +112,46 @@ PparamLatPairs : Pattern {
 	}
 }
 
+PparamField : Pattern {
+	var <>numLatitudes, <>numLongitudes, <>frontVal, <>rearVal, <>curveLong, <>latTiltF,<>latTiltR,<>curveLat,<>latCurveWarp,<>widthComp, <>length;
 
-//p=PparamFeed(numPoints:8,inVal:1,minVal:0.5,maxVal:2,inValMul:1.001,accumFeedMul:1.2,prevFeedMul:1.1,deviation:0.1,length:inf).asStream
-//p.next
+	*new { arg numLatitudes, numLongitudes, frontVal, rearVal, curveLong, latTiltF,latTiltR,curveLat,latCurveWarp,widthComp,length;
+
+		^super.newCopyArgs(numLatitudes, numLongitudes,frontVal, rearVal, curveLong, latTiltF, latTiltR, curveLat,latCurveWarp,widthComp, length);
+
+	}
+
+	storeArgs { ^[numLatitudes, numLongitudes, frontVal, rearVal, curveLong, latTiltF, latTiltR, curveLat, latCurveWarp,widthComp, length] }
+
+	embedInStream { arg inval;
+
+		var frontValStr, rearValStr, curveLongStr, curveLatStr,latTiltFStr,latTiltRStr,latCurveWarpStr;
+
+		frontValStr = frontVal.asStream;
+		rearValStr = rearVal.asStream;
+		curveLongStr = curveLong.asStream;
+		curveLatStr = curveLat.asStream;
+		latTiltFStr = latTiltF.asStream;
+		latTiltRStr = latTiltR.asStream;
+		latCurveWarpStr = latCurveWarp.asStream;
+
+		length.value(inval).do {
+			inval=ParamField(numLatitudes:numLatitudes,
+				numLongitudes:numLongitudes,
+				frontVal:frontValStr.next(inval),
+				rearVal:rearValStr.next(inval),
+				curveLong:curveLongStr.next(inval),
+				latTiltF:latTiltFStr.next(inval),
+				latTiltR:latTiltRStr.next(inval),
+				curveLat:curveLatStr.next(inval)
+				latCurveWarp:latCurveWarpStr.next(inval),
+				widthComp:widthComp
+			).yield
+		};
+
+		^inval;
+	}
+}
 
 PparamFeed : Pattern {
 
@@ -141,7 +167,6 @@ PparamFeed : Pattern {
 
 	embedInStream { | inval |
 
-	var paramfeed= ParamFeed(numPoints:numPoints, minVal:minVal,maxVal:maxVal,inValMul:inValMul, accumFeedMul:accumFeedMul,prevFeedMul:prevFeedMul,deviation:deviation);
 	var inValStr=inVal.asStream;
 	var minValStr=minVal.asStream;
 	var maxValStr=maxVal.asStream;
@@ -149,6 +174,7 @@ PparamFeed : Pattern {
 	var accumFeedMulStr=accumFeedMul.asStream;
 	var prevFeedMulStr=prevFeedMul.asStream;
 	var deviationStr=deviation.asStream;
+	var paramfeed= ParamFeed(numPoints:numPoints, minVal:minValStr.next,maxVal:maxValStr.next,inValMul:inValMulStr.next, accumFeedMul:accumFeedMulStr.next,prevFeedMul:prevFeedMulStr.next,deviation:deviationStr.next);
 
 		length.value(inval).do {
 
@@ -169,29 +195,27 @@ PparamFeed : Pattern {
 
 }
 
-//p=PparamCellFunc([0.1,0.4,0.2,0.3], {|x,y,z| y=[x,z].choose*rrand(0.9,1.1)},0.3,0.5,inf).asStream
-//p.next
 
 PparamCellFunc : Pattern {
 
-	var valArray, func,minVal, maxVal, length=inf;
+	var valArray, inVal,func,minVal, maxVal, length=inf;
 
-	*new { arg valArray, func, minVal, maxVal, length=inf;
+	*new { arg valArray, inVal,func, minVal, maxVal, length=inf;
 
-		^super.newCopyArgs(valArray, func, minVal, maxVal,length);
+		^super.newCopyArgs(valArray, inVal,func, minVal, maxVal,length);
 
 	}
 
-	storeArgs { ^[valArray, func,minVal, maxVal, length] }
+	storeArgs { ^[valArray, inVal, func,minVal, maxVal, length] }
 
 	embedInStream { arg inval;
 
-		var cellArray=ParamCellFunc(valArray, func, minVal, maxVal);
 		var valArrayStr=valArray.asStream;
 		var funcStr=func.asStream;
 		var minValStr=minVal.asStream;
 		var maxValStr=maxVal.asStream;
-
+		var invalStr=inVal.asStream;
+		var cellArray=ParamCellFunc(valArrayStr.next, funcStr.next, minValStr.next, maxValStr.next);
 		length.value(inval).do {
 
 			cellArray.valArray=valArrayStr.next(inval);
@@ -199,7 +223,7 @@ PparamCellFunc : Pattern {
 			cellArray.minVal=minValStr.next(inval);
 			cellArray.maxVal=maxValStr.next(inval);
 
-			inval=cellArray.next.yield;
+			inval=cellArray.next(invalStr.next(inval)).yield;
 
 		};
 
@@ -266,7 +290,6 @@ PparamCells : Pattern {
 
 	embedInStream { arg inval;
 
-		var cellArray=ParamCells(numPoints,minVal, maxVal,curve,errorProb, nil,warp);
 		var inValsStr=inVals.asStream;
 		var minValStr=minVal.asStream;
 		var maxValStr=maxVal.asStream;
@@ -274,6 +297,8 @@ PparamCells : Pattern {
 		var errorProbStr=errorProb.asStream;
 		var neighbourBiasStr=neighbourBiasFunc.asStream;
 		var warpStr=warp.asStream;
+
+		var cellArray=ParamCells(numPoints,minValStr.next, maxValStr.next,curveStr.next,errorProbStr.next,neighbourBiasStr.next,warpStr.next);
 
 		length.value(inval).do {
 

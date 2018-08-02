@@ -1,0 +1,370 @@
+class:: ParamLatPairs
+summary:: Generates an array of values derived from an envelope, intended for lateral grouping of parameters for synthesis processes distributed in a multichannel loudspeaker array. An envelope is created for the longitude (front to rear) of the multi-channel system, along which latitudes of channel pairs are placed. The result is a globally controlled field that can tilt and warp flexibly.
+
+related:: Classes/ParamPeak, Classes/ParamCurve, Classes/ParamField, Classes/ParamCells, Classes/ParamCellFunc, Classes/ParamDeviation, Classes/ParamFeed
+categories:: Parameter Distribution
+
+Description::
+
+ParamLatPairs is one of several parameter distribution classes intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. The parameter distribution classes offer possibilities for global control of local spatial differentiation, which is useful both in algorithmic composition and live performance. In a mulichannel set-up, each output value can be mapped to an individual synth in a different output channel. If different instances of ParamLatPairs are generated over time and mapped to the same set of synths, a dynamically moving spatial texture can be created.
+
+For more details regarding parameter distrubution and synthesis see:
+
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+For more on spatial dimensions (latitudes and longitudes) see:
+
+Nyström, E. (2015) 'Low-Level Topology of Spatial Texture' Proceedings of ICMC 2015, Denton, Texas, US.
+
+classmethods::
+
+method::new
+
+argument::numLatitudes
+The quantity of latitudes. Latitudes are lateral pairs of loudspeakers placed from front to rear of a system. Thus, if you have an 8-channel array in lateral pairs, numLatitudes should be 4.
+argument::frontVal
+The frontmost parameter value. A longitunial curve will stretch from this value to rearVal.
+argument::rearVal
+The rearmost parameter value.
+argument::curveLong
+A positive or negative value.
+This is the shape of the envelope that stretches from front to rear.
+argument::latTiltF
+A positive or negative value of less than 1.
+The tilt of the frontmost latitude.
+argument::latTiltR
+A positive or negative value of less than 1.
+The tilt of the rearmost latitude.
+argument:: widthComp
+An array with which the latitudinal lilts are multiplied, in order to compensate for the difference in width between speakers in, for instance, a circle or oval setup. For instance, if the front and rear is half the width of the two middle latitudes, then an appropriate array may be [0.5,1,1,0.5].
+
+Examples::
+
+code::
+
+//A simple synth to make a texture with
+
+(
+SynthDef(\whiteBPF, {| out=0, freq=1000, bw=0.5, modf=10, modmul=0, amp=0.1 |
+	var noise=WhiteNoise.ar(amp)*SinOsc.kr(modf,mul:modmul,add:1-modmul);
+	var filt=BHiPass4.ar(BBandPass.ar(noise,freq,bw),freq,0.6);
+	Out.ar(out,filt);
+}).add;
+)
+
+~outputs=(0..7)//assuming that channels 0 to 7 are set up pairwise
+//for instance
+//    0  1
+//  2      3
+//  4      5
+//    6  7
+
+//if you want to mock this up in stereo, though the latitide/longitude relationship will be lost, you can just create a repeated stereo:
+//~outputs=[0,1,0.1,0.1,0.1]
+
+//array of synths distributed to the 8-channel speaker array.
+
+~synthArray={|i| Synth(\whiteBPF, [\out,~outputs[i]])}!8;
+
+//if mixing down to stereo, add this
+
+//generate an array of frequency values
+
+~freqs=ParamLatPairs(numLatitudes:4,frontVal:3000,rearVal:6000,curveLong:2,latTiltF:-0.2,latTiltR:0.2,widthComp:[0.5,1,1,0.5])
+
+//gives you this array
+
+[ 3300, 2727.2727272727, 3929.6043617499, 3020.1775355655, 4419.9861531318, 4206.2129819983, 5400, 6666.6666666667 ].plot;
+
+//map it to the array of synths
+
+~synthArray.do{|synth,i| synth.set(\freq, ~freqs[i])}
+
+//try generating different arrays by changing peakPos, peakWidth, minVal, maxVal, then map to synths as above.
+
+//off
+~synthArray.do(_.free)
+
+//a more interactive example
+//three ParamLatPairs are used for different parameters in the texture
+//a fader for each parameter
+(
+var w,synthArray,splay;
+var wcomp=[0.5,1.0,1.0,0.5];
+var frontFreq=1000,rearFreq=1000,frontBw=0.3,rearBw=0.3,frontModF=5,rearModF=5,curveLong=0,latTiltF=0,latTiltR=0;
+var numLatitudes=4,updateSynths;
+
+w=Window("ParamLatPairs",bounds:Rect(200, 200, 430, 400));
+w.front;
+w.addFlowLayout;
+
+synthArray={|i| Synth(\whiteBPF, [\out,~outputs[i],\freq,frontFreq,\bw,frontBw,\modmul,1,\modf,frontModF])}!8;
+
+updateSynths={|numLatitudes, frontFreq, rearFreq, frontModF, rearModF, frontBw, rearBw, curveLong, latTiltF, latTiltR, wcomp |
+	var freqs,modfs,bws;
+	freqs=ParamLatPairs(numLatitudes,frontFreq,rearFreq,curveLong,latTiltF,latTiltR,wcomp);
+	modfs=ParamLatPairs(numLatitudes,frontModF,rearModF,curveLong,latTiltF,latTiltR,wcomp);
+	bws=ParamLatPairs(numLatitudes,frontBw,rearBw,curveLong,latTiltF,latTiltR,wcomp);
+
+	synthArray.do{|synth,i| synth.set(\freq,freqs[i], \bw, bws[i],\modf, modfs[i])};
+};
+
+//sets freq, bw, and modfreq, for the front of the system
+EZSlider(w, 80@350,"frontVal",action:{|val|
+
+	var freqs,modfs,bws;
+	frontFreq=val.value.linexp(0.0,1.0,1000,10000);
+	frontBw=val.value.linexp(0.0,1.0,0.3,0.1);
+	frontModF=val.value.linexp(0.0,1.0,5,15);
+
+updateSynths.(numLatitudes,frontFreq,rearFreq,frontModF,rearModF,frontBw,rearBw,curveLong,latTiltF,latTiltR,wcomp);
+
+},layout:'vert');
+
+//sets freq, bw, and modfreq, for the rear of the system
+EZSlider(w, 80@350,"rearVal",action:{|val|
+
+	var freqs,modfs,bws;
+	rearFreq=val.value.linexp(0.0,1.0,1000,10000);
+	rearBw=val.value.linexp(0.0,1.0,0.3,0.1);
+	rearModF=val.value.linexp(0.0,1.0,5,15);
+
+updateSynths.(numLatitudes,frontFreq,rearFreq,frontModF,rearModF,frontBw,rearBw,curveLong,latTiltF,latTiltR,wcomp);
+
+},layout:'vert');
+
+//curvature
+EZSlider(w, 80@350,"curveLong",ControlSpec(-10,10,\lin,0.001),action:{|val|
+
+	var freqs,modfs,bws;
+	curveLong=val.value;
+
+updateSynths.(numLatitudes,frontFreq,rearFreq,frontModF,rearModF,frontBw,rearBw,curveLong,latTiltF,latTiltR,wcomp);
+
+},initVal:0,layout:'vert');
+
+//front tilt
+EZSlider(w, 80@350,"latTiltF",controlSpec:ControlSpec(minval:-0.5,maxval:0.5,warp:\lin,step:0.0001),action:{|val|
+
+	var freqs,modfs,bws;
+	latTiltF=val.value;
+
+updateSynths.(numLatitudes,frontFreq,rearFreq,frontModF,rearModF,frontBw,rearBw,curveLong,latTiltF,latTiltR,wcomp);
+
+},initVal:0,layout:'vert');
+
+//rear tilt
+EZSlider(w, 80@350,"latTiltR",controlSpec:ControlSpec(minval:-0.5,maxval:0.5,warp:\lin,step:0.0001),action:{|val|
+
+	var freqs,modfs,bws;
+	latTiltR=val.value;
+
+updateSynths.(numLatitudes,frontFreq,rearFreq,frontModF,rearModF,frontBw,rearBw,curveLong,latTiltF,latTiltR,wcomp);
+
+},initVal:0,layout:'vert');
+
+);
+
+// discontinuous spatial shifts
+// the ParamCurve arrays are indepenent here, with randomly selected values
+// this example also has changing amplitude modulation frequency for accentuating the shifts
+(
+var synthArray,splay,frontVal=1.0.rand,rearVal=(frontVal+rrand(-0.2,0.2)).fold(0,1);
+
+synthArray={|i| Synth(\whiteBPF, [\out,~outputs[i],\modmul,1])}!8;
+
+fork {
+
+	inf.do {
+
+		var pos,modfreq,freqs,bws,modmuls,curveLong,modfreqscale,latTiltF,latTiltR;
+		curveLong=rrand(-10,10);
+		modfreq=exprand(5,20);// a new AM freq at every iteration; same for all channels
+		frontVal=(rearVal*rrand(0.8,1.2)).wrap(0,1);//front value determined in relation to previous rear value
+		rearVal=(frontVal+rrand(-0.2,0.2)).fold(0,1);//rear val is determined in relation to front
+		latTiltF=rrand(-0.3,0.3);//random front tilt
+		latTiltR=latTiltF.neg;//rear tilt  is opposite of front
+		"front ".postf;frontVal.postln;
+		"rear ".postf;rearVal.postln;
+		//mapping front an rear to the different parameters
+		freqs=ParamLatPairs(numLatitudes: 4, frontVal: frontVal.linexp(0,1,3000,12000), rearVal: rearVal.linexp(0,1,3000,12000), curveLong: curveLong, latTiltF: latTiltF, latTiltR: latTiltR);
+
+		bws=ParamLatPairs(numLatitudes: 4, frontVal: frontVal.linexp(0,1,0.4,0.1), rearVal: rearVal.linexp(0,1,0.4,0.1), curveLong: curveLong, latTiltF: latTiltF, latTiltR: latTiltR);
+
+		modfreqscale=ParamLatPairs(numLatitudes: 4, frontVal: frontVal.linexp(0,1,0.5,1.0), rearVal: rearVal.linexp(0,1,0.5,1.0), curveLong: curveLong, latTiltF: latTiltF, latTiltR: latTiltR)*modfreq;
+
+		synthArray.do{|synth,i| synth.set(\freq, freqs[i], \bw, bws[i], \modf, modfreqscale[i])};
+
+		exprand(0.2,2.0).wait;
+	}
+
+}
+);
+
+// a granular texture
+(
+SynthDef(\grainHPF, {| out, freq, res=0.3, density,dev,amp=0.1 |
+	var impulse=GaussTrig.ar(density,dev);
+	var hpf=BHiPass4.ar(impulse, freq, res);
+	Out.ar(out,hpf*amp);
+}).add;
+);
+
+//a gradient of densities and spectral centre is created between front and rear
+//grain propagation is more aperiodic (deviation) the greater the density.
+(
+var w,synthArray,splay;
+var wcomp=[0.5,1.0,1.0,0.5];
+var frontFreq=100, rearFreq=100, frontDens=10, rearDens=10, frontDev=0.01, rearDev=0.01, curveLong=0, latTiltF=0, latTiltR=0;
+var numLatitudes=4, updateSynths;
+
+w=Window("ParamLatPairs",bounds:Rect(200, 200, 430, 400));
+w.front;
+w.addFlowLayout;
+
+synthArray={|i| Synth(\grainHPF, [\out,~outputs[i],\freq,frontFreq,\density,frontDens,\dev,frontDev,\delay,0.05])}!8;
+
+updateSynths={ | numLatitudes, frontFreq, rearFreq, frontDens, rearDens, frontDev,rearDev,curveLong, latTiltF, latTiltR, wcomp |
+
+	var freqs,densities,deviations;
+
+	freqs=ParamLatPairs(numLatitudes,frontFreq,rearFreq,curveLong,latTiltF,latTiltR,wcomp);
+	densities=ParamLatPairs(numLatitudes,frontDens,rearDens,curveLong,latTiltF,latTiltR,wcomp);
+	deviations=ParamLatPairs(numLatitudes,frontDev,rearDev,curveLong,latTiltF,latTiltR,wcomp);
+
+	synthArray.do{|synth,i| synth.set(\freq,freqs[i],\density,densities[i],\dev,deviations[i])};
+};
+
+//sets freq, bw, and modfreq, for the front of the system
+EZSlider(w, 80@350,"frontVal",action:{|val|
+
+	frontFreq=val.value.linexp(0.0,1.0,2000,12000);
+	frontDev=val.value.linlin(0.0,1.0,0.01,1.0);
+	frontDens=val.value.linexp(0.0,1.0,10,500);
+
+updateSynths.(numLatitudes, frontFreq, rearFreq, frontDens, rearDens, frontDev,rearDev,curveLong, latTiltF, latTiltR, wcomp);
+
+},layout:'vert');
+
+//sets freq, bw, and modfreq, for the rear of the system
+EZSlider(w, 80@350,"rearVal",action:{|val|
+
+	rearFreq=val.value.linexp(0.0,1.0,2000,12000);
+	rearDev=val.value.linlin(0.0,1.0,0.01,1.0);
+	rearDens=val.value.linexp(0.0,1.0,10,500);
+
+updateSynths.(numLatitudes, frontFreq, rearFreq, frontDens, rearDens, frontDev,rearDev,curveLong, latTiltF, latTiltR, wcomp);
+
+},layout:'vert');
+
+//curvature
+EZSlider(w, 80@350,"curveLong",ControlSpec(-10,10,\lin,0.001),action:{|val|
+
+	curveLong=val.value;
+
+updateSynths.(numLatitudes, frontFreq, rearFreq, frontDens, rearDens, frontDev,rearDev,curveLong, latTiltF, latTiltR, wcomp);
+
+},initVal:0,layout:'vert');
+
+//front tilt
+EZSlider(w, 80@350,"latTiltF",controlSpec:ControlSpec(minval:-0.5,maxval:0.5,warp:\lin,step:0.0001),action:{|val|
+
+	latTiltF=val.value;
+
+updateSynths.(numLatitudes, frontFreq, rearFreq, frontDens, rearDens, frontDev,rearDev,curveLong, latTiltF, latTiltR, wcomp);
+
+},initVal:0,layout:'vert');
+
+//rear tilt
+EZSlider(w, 80@350,"latTiltR",controlSpec:ControlSpec(minval:-0.5,maxval:0.5,warp:\lin,step:0.0001),action:{|val|
+
+	latTiltR=val.value;
+
+updateSynths.(numLatitudes, frontFreq, rearFreq, frontDens, rearDens, frontDev,rearDev,curveLong, latTiltF, latTiltR, wcomp);
+
+},initVal:0,layout:'vert');
+
+)
+
+//an gaussian impulse texture.
+
+(
+SynthDef(\impHPF, {| out, freq, res=0.3, impRate, pw, delay, amp=0.1 |
+	var impulse=DelayL.ar(LFGauss.ar(impRate.reciprocal, pw), delaytime:delay);
+	var hpf=BHiPass4.ar(impulse, freq, res);
+	Out.ar(out,hpf*amp);
+}).add;
+)
+
+(
+var w,synthArray,splay;
+var wcomp=[0.5,1.0,1.0,0.5];
+var frontFreq=100, rearFreq=100, impRate=30, frontPw=0.01, rearPw=0.01,frontDelay=0.001, rearDelay=0.001, curveLong=0, latTiltF=0, latTiltR=0;
+var numLatitudes=4, updateSynths;
+
+w=Window("ParamLatPairs",bounds:Rect(200, 200, 430, 400));
+w.front;
+w.addFlowLayout;
+
+synthArray={|i| Synth(\impHPF, [\out,~outputs[i],\freq,frontFreq,\impRate,impRate,\pw,frontPw,\delay,frontDelay])}!8;
+
+updateSynths={ | numLatitudes, frontFreq, rearFreq, frontDelay, rearDelay, frontPw, rearPw, impRate,curveLong, latTiltF, latTiltR, wcomp |
+
+	var freqs,impulseRates,pws,delays;
+
+	freqs=ParamLatPairs(numLatitudes,frontFreq,rearFreq,curveLong,latTiltF,latTiltR,wcomp);
+	pws=ParamLatPairs(numLatitudes,frontPw,rearPw,curveLong,latTiltF,latTiltR,wcomp);
+	delays=ParamLatPairs(numLatitudes,frontDelay,rearDelay,curveLong,latTiltF,latTiltR,wcomp);
+
+	synthArray.do{|synth,i| synth.set(\freq,freqs[i],\impRate,impRate,\pw,pws[i],\delay,delays[i])};
+};
+
+//sets freq, bw, and modfreq, for the front of the system
+EZSlider(w, 80@350,"frontVal",action:{|val|
+
+	frontFreq=val.value.linexp(0.0,1.0,100,300);
+	frontPw=val.value.linexp(0.0,1.0,0.01,0.001);
+	frontDelay=val.value.linexp(0.0,1.0,0.05,0.001);//decrease delay when biasing to front
+updateSynths.(numLatitudes, frontFreq, rearFreq, frontDelay, rearDelay, frontPw, rearPw, impRate,curveLong, latTiltF, latTiltR, wcomp);
+
+},layout:'vert');
+
+//sets freq, bw, and modfreq, for the rear of the system
+EZSlider(w, 80@350,"rearVal",action:{|val|
+
+	rearFreq=val.value.linexp(0.0,1.0,100,300);
+	rearPw=val.value.linexp(0.0,1.0,0.01,0.001);
+	rearDelay=val.value.linexp(0.0,1.0,0.05,0.001);//decrease delay when biasing to rear
+updateSynths.(numLatitudes, frontFreq, rearFreq, frontDelay, rearDelay, frontPw, rearPw, impRate,curveLong, latTiltF, latTiltR, wcomp);
+
+},layout:'vert');
+
+//curvature
+EZSlider(w, 80@350,"curveLong",ControlSpec(-10,10,\lin,0.001),action:{|val|
+
+	curveLong=val.value;
+
+updateSynths.(numLatitudes, frontFreq, rearFreq,frontDelay, rearDelay,  frontPw, rearPw, impRate,curveLong, latTiltF, latTiltR, wcomp);
+
+},initVal:0,layout:'vert');
+
+//front tilt
+EZSlider(w, 80@350,"latTiltF",controlSpec:ControlSpec(minval:-0.5,maxval:0.5,warp:\lin,step:0.0001),action:{|val|
+
+	latTiltF=val.value;
+
+updateSynths.(numLatitudes, frontFreq, rearFreq, frontDelay, rearDelay, frontPw, rearPw, impRate,curveLong, latTiltF, latTiltR, wcomp);
+
+},initVal:0,layout:'vert');
+
+//rear tilt
+EZSlider(w, 80@350,"latTiltR",controlSpec:ControlSpec(minval:-0.5,maxval:0.5,warp:\lin,step:0.0001),action:{|val|
+
+	latTiltR=val.value;
+
+updateSynths.(numLatitudes, frontFreq, rearFreq,frontDelay, rearDelay,  frontPw, rearPw, impRate,curveLong, latTiltF, latTiltR, wcomp);
+
+},initVal:0,layout:'vert');
+
+)
+::

@@ -1,0 +1,80 @@
+class:: ParamCellFunc
+summary:: Outputs an array of values, each of which is influenced by the value of its neighbours, by a rule set in a user-supplied function. Successive iteration over an instance of ParamCellFunc can generate a sequence of arrays with values which organise in relation to one another. The class is closely related to ParamCells.
+
+related:: Classes/ParamPeak, Classes/ParamCurve, Classes/ParamField, Classes/ParamLatPairs, Classes/ParamCells, Classes/ParamDeviation, Classes/ParamFeed
+categories:: Parameter Distribution
+
+Description::
+
+ParamCellFunc is one of several parameter distribution classes intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. The parameter distribution classes offer possibilities for global control of local spatial differentiation, which is useful both in algorithmic composition and live performance. In a mulichannel set-up, each output value can be mapped to an individual synth in a different output channel.
+
+For more details see:
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+classmethods::
+
+method::new
+
+argument::valArray
+An initial array, the size of the quantity of output values desired.
+argument::func
+A function determining how each cell relates to its neighbour. The function is passed the arguments: leftNeighbourValue, thisCellValue, rightNeighbourValue, index. The function needs to return one value.
+argument::minVal
+The minimum output value allowed.
+argument::maxVal
+The maximum output value allowed.
+
+instancemethods::
+NB. All the arguments for class method .new have getters and setters so that a instance of ParamCells can be updated.
+
+method:: next
+argument::inVal
+An optional input value which will replace the value in one of the cells before calculating the output array. This value will not be output, but it will influence its neighbouring values. If set to nil, the algorithm with generate output without input.
+argument::index
+An optional index in the array at which to put inVal. Must be a value between 0 and numPoints-1. If set to nil, an index will be chosen according to the seq argument.
+
+returns:: a new array of values.
+discussion::
+code::
+//a function determining the relationship of each cell (y) and its neighbours (x, and z)
+(
+f={|x,y,z,i|
+	y=[x,z].choose*exprand(0.8,1/0.8);//choose left or right neighbour and multiply with random number
+	0.1.coin.if({y=1.0.rand}); //a potential error
+	y//output
+};
+)
+//instantiate an 8-channel ParamCells
+x=ParamCellFunc(Array.rand(8,0.0,1.0),f,0,1);
+//iterate with an input value at chosen index
+x.next(0.8,2)
+//iterate without specifying arguments
+x.next
+::
+
+method::nextCell
+Updates and outputs the value of only one specified cell. In topographic synthesis, this is useful if you want to change parameters of only one synth in one channel, rather than all at once.
+argument::inVal
+An optional input value which will replace the output value in the next iteration of the array. This means that inVal will influence the future of its neighbours, but not this current iteration.
+argument::index
+The index of the cell to update. Must be a value between 0 and numPoints-1.
+returns:: a single value
+
+discussion::
+code::
+//a function determining the relationship of each cell (y) and its neighbours (x, and z)
+(
+f={|x,y,z,i|
+	y=[x,z].choose*exprand(0.8,1/0.8);//choose left or right neighbour and multiply with random number
+	0.1.coin.if({y=1.0.rand}); //a potential error
+	y//output
+};
+)
+//instantiating an 8-channel ParamCells
+x=ParamCellFunc(Array.rand(8,0.0,1.0),f,0,1);
+//iterate with an input value at chosen index
+x.nextCell(0.5,2)
+//iterate without specifying arguments
+x.nextCell(nil,2)
+::
+

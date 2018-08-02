@@ -1,3 +1,4 @@
+//(c) 2018 Erik Nyström, published under GNU General Public License, GPLv3.
 
 ParamPeak {
 
@@ -16,9 +17,10 @@ ParamPeak {
 		array=Array.series(numPoints,0,1);//an array with indexes; one for each channel
 		array=env.at(array);// the values of the envelope are read into the index of each channel
 
-		panenv=Env({|i| array.rotate(i)}!numPoints, {1}!(numPoints-1),\lin);//an envelope of envelopes with the value array rotated for each channel, so that every time point in this envelope will generate an array of values going to each channel
+		panenv=Env({|i| array.rotate(i)}!(numPoints+1), {1}!(numPoints),\lin);//an envelope of envelopes with the value array rotated for each channel, so that every time point in this envelope will generate an array of values going to each channel
 		peakPos=peakPos-(peakWidth/2);
-		outArray=panenv.at(peakPos%numPoints);//here is the array of now points, this is mapped to each individual synth at a given moment
+		peakPos=peakPos%numPoints;
+		outArray=panenv.at(peakPos);
 
 		^outArray;
 
@@ -28,26 +30,26 @@ ParamPeak {
 
 ParamPeakWarp {
 
-	* new { | numPoints=12, peakPos=1,minVal=0.01,maxVal=1,curve=3|
+	* new { | numPoints=12, peakPos=1, minVal=0.01, maxVal=1, curve=3 |
 
-var envFunc,curves,curvArray,levels,env,segsArray,chArray,outArray;
-segsArray=Array.newClear(2);
-segsArray.put(0,peakPos);
-segsArray.put(1,numPoints-1-peakPos);
-curvArray=[curve,curve.neg];
-levels=[minVal,maxVal,minVal];
-chArray=Array.series(numPoints,0,1);
+	var envFunc,curves,curvArray,levels,env,segsArray,chArray,outArray;
+
+	segsArray=Array.newClear(2);
+	segsArray.put(0,peakPos);
+	segsArray.put(1,numPoints-1-peakPos+0.0001);
+	curvArray=[curve,curve.neg];
+	levels=[minVal,maxVal,minVal];
+	chArray=Array.series(numPoints,0,1);
 
 	env=Env(levels,segsArray,curvArray);
-	env.duration=chArray.maxItem;
-	outArray=env.at(chArray);
-	outArray.postln;
 
+	outArray=env.at(chArray);
 	^outArray;
 
 	}
 
 }
+
 
 //one dimensional curve with possible duplication using stutter, for stratified latitudes
 ParamCurve {
@@ -69,8 +71,6 @@ ParamCurve {
 	}
 
 }
-
-//ParamField.new(numLatitudes:4,numLongitudes:4,frontVal:1000,rearVal:4000,curveLong:4,latTiltF:0.01,latTiltR:-0.2,curveLat:0.1,latCurveWarp:1.1)
 
 //frontVal and rearVal are the extremities of the longitude
 //curveLong is the curvature of the envelope along the longitude
@@ -145,11 +145,6 @@ ParamLatPairs {
 
 }
 
-//w=ParamCells(neighbourBiasFunc:nil)
-//w.next(2000,0)
-//p=ParamCells(warp:2)
-//p.next
-
 ParamCells {
 	var <>numPoints=8, <>minVal=2000, <>maxVal=12000, <>curve=\exp, <>errorProb=0.1, <>neighbourBiasFunc=nil,<>warp=1;
 	var cellArray, cellFunc, routine,outvals, errorfunc, nBias;
@@ -175,11 +170,15 @@ ParamCells {
 
 	next { | inVal, index |
 
-		var gravityBias;
+		var gravityBias,centre;
 
 		if(inVal.isNil.not && index.isNil.not, {cellArray.put(index, inVal)});
 
 		if(neighbourBiasFunc==nil, {nBias={1.0.rand}},{nBias=neighbourBiasFunc});
+
+		centre=case
+		{curve==\lin} {1.linlin(0,2,minVal,maxVal)}
+		{curve==\exp} {1.linexp(0,2,minVal,maxVal)};
 
 		gravityBias=Env([1,warp,1], [1,1]);
 
@@ -197,21 +196,14 @@ ParamCells {
 
 			grav=gravityBias[gravindex];//determine the pull towards or away from the middle
 
-			//if(gravindex>1, {cell=cell*rrand(1, grav)}, {cell=cell/rrand(1, grav)}); //if gravindex is more than 1 then push cell away from centre
-
-			if(gravindex>1, {
-				grav = case
-				{grav>1} {cell=cell*rrand(1, grav)}
-				{grav<1} {cell=cell/rrand(1, grav)}
-
-			}, {
-				grav = case
-				{grav>1} {cell=cell/rrand(1, grav)}
-				{grav<1} {cell=cell*rrand(1, grav)}
+			//if grav is more or less than one, then multiply cell so that it moves towards edges or middle
+			if(grav!=1,{
+			if(gravindex>1, {cell=(cell*grav).clip(centre*rrand(1.0,1.05),maxVal*rrand(0.95,1.0))});
+			if(gravindex<1, {cell=(cell/grav).clip(minVal*rrand(1.0,1.05),centre*rrand(0.95,1.0))});
 			});
 
 			if(errorProb.coin,{cell=errorfunc.()},cell);//potential error
-			cell
+			cell=cell.clip(minVal,maxVal)
 			};
 
 		^cellArray;
@@ -220,10 +212,13 @@ ParamCells {
 	//index is both index of inval and index of cell to be updated
 	nextCell { | inVal, index |
 
-		var gravityBias,cell,bias,grav,gravindex;
+		var gravityBias,cell,bias,grav,gravindex,centre;
 
-		if(inVal.isNil.not && index.isNil.not, {cellArray.put(index, inVal)});
 		if(index.isNil, {index=numPoints.rand});
+
+		centre=case
+		{curve==\lin} {1.linlin(0,2,minVal,maxVal)}
+		{curve==\exp} {1.linexp(0,2,minVal,maxVal)};
 
 		gravityBias=Env([1,warp,1], [1,1]);
 
@@ -237,11 +232,15 @@ ParamCells {
 
 			grav=gravityBias[gravindex];//determine the pull towards or away from the middle
 
-		   if(gravindex>1, {cell=cell*rrand(1, grav)}, {cell=cell/rrand(1, grav)}); //if gravindex is more than 1 then push cell away from centre
+		//if grav is more or less than one, then multiply cell so that it moves towards edges or middle
+		    if(grav!=1,{
+		    if(gravindex>1, {cell=(cell*grav).clip(centre*rrand(1.0,1.05),maxVal*rrand(0.95,1.0))});
+		    if(gravindex<1, {cell=(cell/grav).clip(minVal*rrand(1.0,1.05),centre*rrand(0.95,1.0))});
+		    });
 
 		if(errorProb.coin,{cell=errorfunc.()},cell);//potential error
-
-		cellArray.put(index, cell);
+		cell=cell.clip(minVal,maxVal);
+		if(inVal.isNil, {cellArray.put(index, cell)}, {cellArray.put(index, inVal)});//replace cell with inVal
 
 		^cell
 	}
@@ -250,7 +249,7 @@ ParamCells {
 
 ParamCellFunc {
 
-	var <>valArray, >func, <>minVal, <>maxVal, <count=0;
+	var <>valArray, >func, <>minVal, <>maxVal;
 
 	*new { | valArray, func, minVal, maxVal |
 
@@ -261,6 +260,7 @@ ParamCellFunc {
 	next { | inVal, index |
 		//one can leave inval and index blank
 		if(inVal.isNil.not && index.isNil.not, {valArray.put(index, inVal)});
+		if(inVal.isNil.not && index.isNil, {valArray.put(valArray.size.rand, inVal)});
 
 		valArray=valArray.do{ | val, i |
 
@@ -275,74 +275,19 @@ ParamCellFunc {
 	}
 
 	//iterate just a single cell
-	nextCell { | inVal, index, seq=0 |
-		//seq 0 means sequence, seq 0 meams rand
-		//if inval is nil the value will be whatever is already in the array
+	nextCell { | inVal, index |
+		var outVal;
+
 		//if index is nil an index will be chosen according to seq
+		if(index.isNil, {index=valArray.size.rand});
 
-		if(index.isNil, {if(seq==0, {index=count % (valArray.size)}, { index=valArray.size.rand})});
+		//valArray.put(index, func.(valArray.wrapAt(index-1),inVal,valArray.wrapAt(index+1), index).fold(minVal,maxVal));
 
-		if(inVal.isNil, {inVal=valArray[index]});
+		outVal=func.(valArray.wrapAt(index-1),valArray[index],valArray.wrapAt(index+1), index).fold(minVal,maxVal);
 
-		valArray.put(index, func.(valArray.wrapAt(index-1),inVal,valArray.wrapAt(index+1), index).fold(minVal,maxVal));
+		if(inVal.notNil, {valArray.put(index,inVal)});
 
-		count=count+1;
-
-		^valArray[index];
-
-	}
-
-}
-
-ParamCellsRule {
-	//outPut should be \states (for 0s and 1s) \indicesOfOne, or indicesOfZero
-	var <>valArray, <>rule, <>errorProb=0, outPut=\states, func;
-
-	*new { | valArray, rule, errorProb=0, outPut=\states |
-
-		^super.newCopyArgs(valArray, rule, errorProb, outPut).init;
-
-	}
-
-	init {
-
-		func = { | leftneighbour, me, rightneighbour, index |
-
-			var array=[leftneighbour,me,rightneighbour];
-			var state;
-			rule=rule.reverse;
-
-			rule.size.do { | i |
-
-			if(array==(i.asBinaryDigits(3)), {state=rule[i];});
-
-			};
-
-		if (errorProb.coin, { state=[1,0][state];"Error in cell %".postf(index);"".postln;});
-		//if error, invert state
-		state;
-
-		}
-
-	}
-
-	next {
-
-		var outVals;
-
-		valArray=valArray.do { | val, i |
-
-		valArray.put(i, func.(valArray.wrapAt(i-1),val,valArray.wrapAt(i+1), i));
-
-		};
-
-		switch(outPut,
-			\states.asSymbol, { outVals=valArray},
-			\indicesOfOne.asSymbol, { outVals=valArray.indicesOfEqual(1)},
-			\indicesOfZero.asSymbol, { outVals=valArray.indicesOfEqual(0)}
-		)
-
-		^outVals;
+		^outVal
 
 	}
 

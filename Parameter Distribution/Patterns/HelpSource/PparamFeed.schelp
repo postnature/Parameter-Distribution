@@ -1,0 +1,92 @@
+class:: PparamFeed
+summary:: A space-time data feed system which generates arrays of values, each of which is influenced by the value of its left neighbour and its previous state. PparamFeed is a pattern implementation of the related ParamFeed, and functions the same way.
+
+related:: Classes/ParamFeed, Classes/PparamCurve, Classes/PparamField, Classes/PparamLatPairs, Classes/PparamCellFunc, Classes/PparamDeviation
+categories:: Parameter Distribution
+
+Description::
+
+PparamFeed is one of several parameter distribution patterns intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. The parameter distribution classes offer possibilities for global control of local spatial differentiation, which is useful both in algorithmic composition and live performance. In a mulichannel set-up, each output value can be mapped to an individual synth in a different output channel.
+
+For more details see:
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+classmethods::
+
+method::new
+All the below arguments, except numPoints, can be patterns.
+argument::numPoints
+The size of the array (quantity of channels). In topographic synthesis, each point corresponds to a synth outputting to an individual loudspeaker channel in space.
+argument::minVal
+The minimum output value allowed. Values fold at minVal.
+argument::maxVal
+The maximum output value allowed. Values fold at maxVal.
+argument::inValMul
+A multiplier for inVal, determining how much of inVal to introduce into the output array. This argument does nothing if set to 1.
+argument::accumFeedMul
+A fraction determining the spatial feeding of values through the array: how much inVal increases successively across the array in one iteration. This argument does nothing if set to 0.
+argument::prevFeedMul
+A fraction determining the temporal feeding of values through  iterations: how much of the previous value at each index of the array is carried forward to the next iteration. This argument does nothing if set to 0.
+argument::deviation
+A fraction determining a maximum random multiplier for each value.
+argument::length
+Number of iterations.
+
+Examples::
+
+code::
+
+// a simple synth
+(
+SynthDef(\sin, { | out, freq, phase=0,amp=0.1 |
+	var sin=SinOsc.ar(freq,phase,mul:amp);
+	Out.ar(out,sin)
+}).add
+);
+//if you're testing this in stereo you can do a multichannel mock-up using Splay to mix down to stereo, just to get the idea
+(
+//this synth is for 8 channels
+SynthDef(\splay8, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, 8);//8 consecutuve channels
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+);
+
+// a simple mapping example
+//set your outputs
+~outputs=(0..7); //or whatever your multichannel outputs are
+//if mixing down to stereo, add this
+~splay=Synth(\splay8,addAction:\addToTail);
+(
+//if mixing down to stereo, add this
+//~splay=Synth(\splay8,addAction:\addToTail);
+
+Pmono(\sin,\out,~outputs,
+	\freq, PparamFeed(~outputs.size,
+		inVal: Pseg(Pbrown(4000,12000,500,inf),durs:Pexprand(0.1,0.5),curves:\exp),
+		minVal:4000,
+		maxVal:12000,
+		inValMul:Pseg(Pbrown(1,1.2,0.2,inf),durs:Pexprand(0.1,0.5),curves:\exp),
+		accumFeedMul:Pseg(Pbrown(0.1,0.3,0.1,inf),durs:Pexprand(0.1,0.5),curves:\exp),
+		prevFeedMul:Pseg(Pbrown(0.2,0.5,0.1,inf),durs:Pexprand(0.1,0.5),curves:\exp),
+		deviation:0.0,
+		length:inf),
+\dur,0.01).play;
+)
+
+(
+//if mixing down to stereo, add this
+//~splay=Synth(\splay8,addAction:\addToTail);
+Pmono(\sin,\out,~outputs,
+	\freq, PparamFeed(~outputs.size,
+		inVal:Pbrown(4000,12000,500,inf),
+		minVal:4000,
+		maxVal:12000,
+		inValMul:Pbrown(1,1.2,0.2,inf),
+		accumFeedMul:Pbrown(0.1,0.3,0.1,inf),
+		prevFeedMul:Pbrown(0.2,0.5,0.1,inf),
+		deviation:0.02,
+		length:inf),
+\dur,Pexprand(0.01,1.0)).play;
+)
+::

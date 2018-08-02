@@ -1,0 +1,124 @@
+class:: PparamCells
+summary:: Outputs an array of values, each of which is influenced by the value of its neighbours, by randomised averaging. PparamCells is a pattern implementation of the related ParamCells, and functions the same way. Successive iterations will generate a sequence of arrays with values which organise in relation to one another.
+
+related:: Classes/ParamPeak, Classes/ParamCurve, Classes/ParamField, Classes/ParamLatPairs, Classes/ParamCellFunc, Classes/ParamDeviation, Classes/ParamFeed
+categories:: Parameter Distribution
+
+Description::
+
+PparamCells is one of several parameter distribution pattern intended for 'topographic synthesis' of spatially differentiated textures by structuring parameter settings among synths in different output channels. The parameter distribution classes offer possibilities for global control of local spatial differentiation, which is useful both in algorithmic composition and live performance. In a mulichannel set-up, each output value can be mapped to an individual synth in a different output channel.
+
+For more details see:
+Nyström, E. (2018), 'Topographic Synthesis: Parameter distribution in spatial texture.' Proceedings of the International Computer Music Conference, 2018, Daegu, Korea.
+
+classmethods::
+
+method::new
+
+All the below arguments, except numPoints, can be patterns.
+
+argument::numPoints
+The size of the array (quantity of channels). In topographic synthesis, each point corresponds to a synth outputting to an individual loudspeaker channel in space.
+argument::inVal
+A number between minVal and maxVal to input. This functions the same way as the .next(inVal) method for ParamCells: a value is entered at a randomly chosen index, and will be part of the calculation of the next state, but not output.
+argument::minVal
+The minimum output value allowed.
+argument::maxVal
+The maximum output value allowed.
+argument::curve
+The symbol code:: \lin or \exp :: determining the scaling of output values.
+argument::errorProb
+A float of <1, determining the probability for error, meaning that the result of the algorithm will be replaced by a random number. A small error probability can make the bahaviour more interesting and prevent stasis.
+argument::neighbourBiasFunc
+An optional function outputting a number between 0, and 1, indicating how to determine the balance between left and right neighbour values in the calculation of a new value. Closer to 0 increases left probability and closer to 1 increases right probability. The default is nil, which means {1.0.rand}.
+argument::warp
+A value of <>1. This creates a warp tendency for the output values. If the value is >1 then a "bump" is created so that the output values are more likely to slip towards minVal or maxVal. If the value is <1 then the opposite will occur: the outputs values will tend towards the middle between minVal and maxVal (determined either linearly or exponentially depending on the curve argument). 1 means no warp.
+argument::length
+Number of iterations.
+
+Examples::
+
+code::
+
+// a simple synth
+(
+SynthDef(\sin, { | out, freq, phase=0,amp=0.1 |
+	var sin=SinOsc.ar(freq,phase,mul:amp);
+	Out.ar(out,sin)
+}).add
+);
+
+//if you're testing this in stereo you can do a multichannel mock-up using Splay to mix down to stereo, just to get the idea
+
+(
+//this synth is for 8 channels
+SynthDef(\splay8, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, 8);//8 consecutuve channels
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+);
+
+// a simple mapping example
+//set your outputs
+~outputs=(0..7); //or whatever your multichannel outputs are
+
+//if mixing down to stereo, add this
+~splay=Synth(\splay8,addAction:\addToTail);
+
+Pmono(\sin, \out, ~outputs, \phase, PparamCells(~outputs.size,nil,0.0,8pi,\lin), \dur, Pexprand(0.2,0.6)).play
+
+//a basic spectral texture
+
+Pmono(\sin, \out, ~outputs, \freq, PparamCells(~outputs.size,inVals:Pseg(Pbrown(2000,12000,1000), Pexprand(0.5,3.0),\exp),minVal:2000,maxVal:12000,curve:\exp,errorProb:0.1,warp:Pbrown(0.8,1.2,0.05)), \dur, Pexprand(0.05,0.6)).play
+
+//grain synth
+(
+SynthDef(\glissgrain, {| out,freq=1000, lpfmod=2, attProp=0.1,dur=0.1, gliss=0.7,curve,amp=0.1 |
+	var env,freqenv,osc,grain;
+	env=Env(times:[attProp,1-attProp]*dur,curve:[curve,curve.neg]);
+	freqenv=env.copy.levels_([1,gliss,1]).kr;
+	freq=(freq*freqenv).fold(40,18000);
+	osc=SinOscFB.ar(freq,freq.explin(600,10000,1.0,0.0));
+	grain=MidEQ.ar(MidEQ.ar(BLowPass4.ar(BHiPass4.ar(osc*env.kr(doneAction:2),freq*0.5,0.01).softclip,(freq*lpfmod).fold(200,16000), 0.3),3500,1,-9),500,0.5,3);
+	OffsetOut.ar(out, grain*amp)
+}).add;
+);
+
+//exact same example as in ParamCells help file, but with PparamCells
+//  a different grain in each channel is generated at every iteration of the texture
+// the spatial differentiation between the grains is created with iterations of PparamCells for grain frequency, glissando, envelope curve and duration
+
+
+(
+var stereoMon=true;
+var numChannels=~outputs.size;//add any number of outputs you like
+var splaySynth = { |numChannels|
+	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
+	var inputs=In.ar(inbus, numChannels);
+	ReplaceOut.ar(out, Splay.ar(inputs))
+}).add;
+};
+stereoMon.if({
+	splaySynth.(numChannels);
+	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
+});
+
+Pbind(\instrument, \glissgrain,\out,~outputs,
+	//an array of frequencies
+	\freq, PparamCells(~outputs.size+1,minVal:200,maxVal:12000,curve:\exp,errorProb:0.05,warp:1.05,length:inf),
+	//an array of durations
+	\dur, PparamCells(~outputs.size+2,minVal:0.0025,maxVal:0.08,curve:\exp,errorProb:0.1,warp:1.05,length:inf),
+	//an array of curves
+	\curve, PparamCells(~outputs.size,minVal:-20,maxVal:50,curve:\lin,errorProb:0.05,warp:1.1,length:inf),
+	//an array of glisses
+	\gliss, PparamCells(~outputs.size,minVal:0.6,maxVal:1.4,curve:\exp,errorProb:0.05,warp:1,length:inf),
+	//a single lpfmod, derived from the freq array
+	\lpfmod,  Pfunc({|ev|ev[\freq][~outputs.size].explin(200,12000,10.0,1.0)}),
+	//a single attProp, derived from the dur array
+	\attProp, Pfunc({|ev|ev[\dur][~outputs.size].expexp(0.0025,0.08,0.1,0.5)}),
+	//a single delta, derived from the dur array
+	\delta, Pfunc({|ev|ev[\dur][~outputs.size+1].expexp(0.0025,0.08,0.2,0.01)}),
+).play
+)
+
+::
