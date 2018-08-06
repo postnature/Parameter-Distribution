@@ -89,7 +89,7 @@ SynthDef(\splay8, {| inbus=0, out=0 |
 //adjust peak to a high value to get smoother value
 (
 var outputs=(0..63);//set your number of outputs: the more the better!
-var stereoMon=false;//set to true if you are monitoring in stereo
+var stereoMon=true;//set to true if you are monitoring in stereo
 var numChannels=outputs.size;
 var w,synthArray,splay,peakWidth=6;
 var splaySynth = { |numChannels|
@@ -223,91 +223,6 @@ fork {
 		bw=ParamPeak(numPoints:numChannels,peakWidth:peakWidth,peakPos:pos,minVal: 0.01,maxVal: 0.4,curve: -2);
 		modmul=ParamPeak(numPoints:numChannels,peakWidth:peakWidth,peakPos:pos,minVal: 0.001,maxVal: 1.0,curve: -2);
 		synthArray.do{|synth,i| synth.set(\freq, freqs[i], \bw, bw[i], \modf, modfreq,\modmul,modmul[i])};
-
-		exprand(0.2,2.0).wait;
-	}
-
-}
-);
-
-// a different synth
-(
-SynthDef(\sinFB, {| out=0, freq=1000, fb=0.0, modf=10, modmul=0, amp=0.1 |
-	var sinfb=SinOscFB.ar(freq,fb,amp)*SinOsc.kr(modf,mul:modmul,add:1-modmul);
-	Out.ar(out,sinfb);
-}).add;
-)
-
-(
-var outputs=(0..7);
-var stereoMon=true;//set to true if you are monitoring in stereo
-var numChannels=outputs.size;
-var w,synthArray,splay,peakWidth=numChannels/2;
-var splaySynth = { |numChannels|
-	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
-	var inputs=In.ar(inbus, numChannels);
-	ReplaceOut.ar(out, Splay.ar(inputs))
-}).add;
-};
-splaySynth.(numChannels);//create splay synth;
-w=Window("ParamPeak",bounds:Rect(200, 200, 410, 140));
-w.front;
-w.addFlowLayout;
-
-synthArray={|i| Synth(\sinFB, [\out,outputs[i],\freq,100,\fb,0.01,\modmul,0.001])}!numChannels;
-stereoMon.if({
-
-	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
-});
-
-Slider2D(w, 400@100)
-.action_({|xypos|
-	var pos,freqmax,fbmax,modmulmax,freqs,fbs,modmuls;
-	pos=xypos.x.value.linlin(0.0,1.0,0.0,7.0);
-	freqmax=xypos.y.value.linexp(0,1,100,200);
-	fbmax=xypos.y.value.linexp(0,1,0.2,2.0);
-	modmulmax=xypos.y.value.linexp(0,1,0.1,1.0);
-
-	freqs=ParamPeak(numPoints:numChannels,peakWidth:peakWidth,peakPos:pos,minVal: 100,maxVal: freqmax,curve: -2); //generate a new frequency array with 8 points (assuming an 8-channel ring)
-	fbs=ParamPeak(numPoints:numChannels,peakWidth:peakWidth,peakPos:pos,minVal: 0.01,maxVal: fbmax,curve: -2);
-	//generate a new bandwidth array with 8 points (assuming an 8-channel ring)
-	modmuls=ParamPeak(numPoints:numChannels,peakWidth:peakWidth,peakPos:pos,minVal: 0.001,maxVal: modmulmax,curve: -2);//an array for amplitude modulation depth
-	freqs.postln;
-	synthArray.do{|synth,i| synth.set(\freq, freqs[i], \fb, fbs[i], \modmul,modmuls[i])};
-})
-)
-
-(
-var outputs=(0..7);//set your outputs
-var stereoMon=true;//set to true if you are monitoring in stereo
-var numChannels=outputs.size;
-var w,synthArray,splay, widths=(2,4..numChannels);
-var splaySynth = { |numChannels|
-	SynthDef(\splay++numChannels, {| inbus=0, out=0 |
-	var inputs=In.ar(inbus, numChannels);
-	ReplaceOut.ar(out, Splay.ar(inputs))
-}).add;
-};
-
-splaySynth.(numChannels);//create splay synth;
-synthArray={|i| Synth(\sinFB, [\out,outputs[i],\freq,50])}!numChannels;
-stereoMon.if({
-
-	Synth(\splay++numChannels,addAction:\addToTail);//instantiate splay synth
-});
-
-fork {
-
-	inf.do {
-
-		var pos,modfreq,freqs,fb,modmul,peakWidth;
-		peakWidth=widths.choose;
-		pos=numChannels.rand;//peak position in the speaker array
-		modfreq=exprand(5,20);// a new AM freq at every iteration; same for all channels
-		freqs=ParamPeak(numPoints:numChannels,peakWidth:peakWidth,peakPos:pos,minVal: 50,maxVal: 200,curve: -2);
-		fb=ParamPeak(numPoints:numChannels,peakWidth:peakWidth,peakPos:pos,minVal: 0.01,maxVal: 1.5,curve: -2);
-		modmul=ParamPeak(numPoints:numChannels,peakWidth:peakWidth,peakPos:pos,minVal: 0.001,maxVal: 1.0,curve: -2);
-		synthArray.do{|synth,i| synth.set(\freq, freqs[i], \fb, fb[i], \modf, modfreq,\modmul,modmul[i])};
 
 		exprand(0.2,2.0).wait;
 	}
